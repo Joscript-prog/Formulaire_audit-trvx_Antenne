@@ -1253,16 +1253,130 @@
         <button type="button" class="btn-primary" onclick="generateReport()">📄 Générer le rapport Word</button>
     </div>
 
-    <div class="editor-overlay" id="editorOverlay">
-        <div class="editor-modal">
-            <div class="editor-header"><h2>✏ Annoter la photo — <span id="editorTitle"></span></h2><button class="editor-close" onclick="closeEditor()">Fermer sans enregistrer</button></div>
-            <div class="editor-body">
-                <div class="editor-toolbar"><!-- contenu identique à l'existant --></div>
-                <div class="editor-canvas-wrap" id="editorCanvasWrap"><div class="editor-stage" id="editorStage"><img class="bg-photo" id="editorBgPhoto" alt="Photo de fond"></div></div>
+<div class="editor-overlay" id="editorOverlay">
+    <div class="editor-modal">
+        <div class="editor-header">
+            <h2>✏ Annoter la photo — <span id="editorTitle"></span></h2>
+            <button class="editor-close" onclick="closeEditor()">Fermer sans enregistrer</button>
+        </div>
+        <div class="editor-body">
+            <div class="editor-toolbar">
+                <div class="selection-panel tool-group" id="selectionPanel">
+                    <h3>✎ Élément sélectionné</h3>
+                    <div id="selPanelImage">
+                        <div class="flip-buttons">
+                            <button class="flip-btn" id="flipHBtn" title="Retourner horizontalement">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18"/><path d="M7 8l-4 4 4 4"/><path d="M17 8l4 4-4 4"/></svg> Miroir H
+                            </button>
+                            <button class="flip-btn" id="flipVBtn" title="Retourner verticalement">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v18"/><path d="M8 7l4-4 4 4"/><path d="M8 17l4 4 4-4"/></svg> Miroir V
+                            </button>
+                        </div>
+                        <div class="small-help">Cliquez à nouveau pour annuler le retournement.</div>
+                    </div>
+                    <div id="selPanelArrow">
+                        <div class="row">
+                            <label style="flex:1; font-size:0.78rem; color:#555;">Couleur
+                                <input type="color" id="selArrowColor" value="#FF0000" style="width:100%; padding:1px; height:28px; border:1px solid #ccc; border-radius:3px;">
+                            </label>
+                        </div>
+                        <div class="swatch-row sel-arrow-swatches" style="display:grid; grid-template-columns:repeat(6,1fr); gap:3px; margin-top:4px;">
+                            <div class="swatch sel-arrow-swatch" style="background:#FF0000" data-color="#FF0000"></div>
+                            <div class="swatch sel-arrow-swatch" style="background:#FFFFFF" data-color="#FFFFFF"></div>
+                            <div class="swatch sel-arrow-swatch" style="background:#FFFF00" data-color="#FFFF00"></div>
+                            <div class="swatch sel-arrow-swatch" style="background:#00B050" data-color="#00B050"></div>
+                            <div class="swatch sel-arrow-swatch" style="background:#0070C0" data-color="#0070C0"></div>
+                            <div class="swatch sel-arrow-swatch" style="background:#000000" data-color="#000000"></div>
+                        </div>
+                        <div class="row" style="margin-top:6px;">
+                            <label style="flex:1; font-size:0.78rem; color:#555;">Épaisseur
+                                <input type="number" id="selArrowThickness" min="2" max="40" value="6" style="width:100%; padding:4px; font-size:0.82rem; border:1px solid #ccc; border-radius:3px;">
+                            </label>
+                            <label style="flex:1; font-size:0.78rem; color:#555;">Taille pointe
+                                <input type="number" id="selArrowHeadSize" min="8" max="80" value="18" style="width:100%; padding:4px; font-size:0.82rem; border:1px solid #ccc; border-radius:3px;">
+                            </label>
+                        </div>
+                        <div class="small-help">Tirez les poignées d'extrémité pour allonger / orienter la flèche.</div>
+                    </div>
+                </div>
+
+                <div class="tool-group">
+                    <h3>Outils d'annotation</h3>
+                    <button class="tool-btn" id="toolAddArrow">➡️ Ajouter une flèche</button>
+                    <button class="tool-btn" id="toolAddCircle">⭕ Ajouter un cercle</button>
+                    <button class="tool-btn" id="toolAddText">🅰️ Ajouter du texte</button>
+                    <button class="tool-btn" id="toolAddMeasurePoint">📍 Ajouter un point de mesure</button>
+                </div>
+
+                <div class="tool-group">
+                    <h3>Texte</h3>
+                    <div class="text-controls">
+                        <input type="text" id="textInput" placeholder="Tapez votre texte…">
+                        <div class="row">
+                            <label style="flex:1;">Police
+                                <select id="textFont">
+                                    <option value="Arial Black, sans-serif">Arial Black</option>
+                                    <option value="Impact, sans-serif">Impact</option>
+                                    <option value="Georgia, serif">Georgia</option>
+                                    <option value="Arial, sans-serif">Arial</option>
+                                    <option value="Verdana, sans-serif">Verdana</option>
+                                </select>
+                            </label>
+                            <label style="width:65px;">Taille
+                                <input type="number" id="textSize" value="20" min="10" max="80">
+                            </label>
+                        </div>
+                        <div class="row">
+                            <label style="flex:1;">Couleur
+                                <input type="color" id="textColor" value="#FF0000">
+                            </label>
+                            <label style="flex:1;">Contour
+                                <input type="color" id="textStroke" value="#FFFFFF">
+                            </label>
+                        </div>
+                        <div class="row" style="gap:4px;">
+                            <label style="flex:1; display:flex; align-items:center; gap:4px; font-size:0.78rem;"><input type="checkbox" id="textBold" checked> Gras</label>
+                            <label style="flex:1; display:flex; align-items:center; gap:4px; font-size:0.78rem;"><input type="checkbox" id="textShadow" checked> Ombre</label>
+                        </div>
+                        <div class="swatch-row">
+                            <div class="swatch" style="background:#FF0000" data-color="#FF0000"></div>
+                            <div class="swatch" style="background:#FFFFFF" data-color="#FFFFFF"></div>
+                            <div class="swatch" style="background:#FFFF00" data-color="#FFFF00"></div>
+                            <div class="swatch" style="background:#00B050" data-color="#00B050"></div>
+                            <div class="swatch" style="background:#0070C0" data-color="#0070C0"></div>
+                            <div class="swatch" style="background:#000000" data-color="#000000"></div>
+                        </div>
+                        <div class="style-preview" id="textPreview">Aperçu</div>
+                        <button class="tool-btn" id="btnAddText" style="background:#2e75b6; color:white; border-color:#1f4e79; justify-content:center; margin-top:6px;">➕ Ajouter le texte</button>
+                    </div>
+                </div>
+
+                <div class="tool-group">
+                    <h3>Conseils</h3>
+                    <p style="font-size:0.78rem; color:#555; margin:4px 0;">
+                        • Glissez un élément pour le déplacer.<br>
+                        • Coin bleu (bas-droite) : redimensionner.<br>
+                        • Pastille orange (en haut) : pivoter.<br>
+                        • Pastille rouge : supprimer.<br>
+                        • Touche <b>Suppr</b> : supprime aussi.
+                    </p>
+                </div>
             </div>
-            <div class="editor-footer"><span class="hint">💡 Astuce : double-cliquez sur un texte pour le modifier.</span><div><button class="btn-secondary" onclick="closeEditor()" style="padding:8px 16px;">Annuler</button><button class="btn-primary" onclick="saveAnnotation()" style="padding:8px 16px;">✅ Enregistrer</button></div></div>
+            <div class="editor-canvas-wrap" id="editorCanvasWrap">
+                <div class="editor-stage" id="editorStage">
+                    <img class="bg-photo" id="editorBgPhoto" alt="Photo de fond">
+                </div>
+            </div>
+        </div>
+        <div class="editor-footer">
+            <span class="hint">💡 Astuce : double-cliquez sur un texte pour le modifier.</span>
+            <div>
+                <button class="btn-secondary" onclick="closeEditor()" style="padding:8px 16px;">Annuler</button>
+                <button class="btn-primary" onclick="saveAnnotation()" style="padding:8px 16px;">✅ Enregistrer</button>
+            </div>
         </div>
     </div>
+</div>
 
     <script src="logos.js"></script>
     <script src="assets.js"></script>
