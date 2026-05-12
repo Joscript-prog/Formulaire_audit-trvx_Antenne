@@ -850,16 +850,25 @@ const Editor = (function () {
   // ---- Aperçu du style de texte ----
   function updateTextPreview() {
     const prev = document.getElementById("textPreview");
-    const txt = document.getElementById("textInput").value || "Aperçu";
-    const font = document.getElementById("textFont").value;
-    const size = parseInt(document.getElementById("textSize").value, 10) || 20;
-    const color = document.getElementById("textColor").value;
-    const stroke = document.getElementById("textStroke").value;
-    const bold = document.getElementById("textBold").checked;
-    const shadow = document.getElementById("textShadow").checked;
-    prev.textContent = txt;
-    applyTextStyle(prev, { font, size, color, stroke, bold, shadow });
-    prev.style.fontSize = Math.min(size, 30) + "px";
+    const txt = document.getElementById("textInput");
+    const font = document.getElementById("textFont");
+    const size = document.getElementById("textSize");
+    const color = document.getElementById("textColor");
+    const stroke = document.getElementById("textStroke");
+    const bold = document.getElementById("textBold");
+    const shadow = document.getElementById("textShadow");
+    // Vérification robuste : si un élément manque, on ne fait rien (pas d'erreur)
+    if (!prev || !txt || !font || !size || !color || !stroke || !bold || !shadow) return;
+    const val = txt.value || "Aperçu";
+    const fontVal = font.value;
+    const sizeVal = parseInt(size.value, 10) || 20;
+    const colorVal = color.value;
+    const strokeVal = stroke.value;
+    const boldVal = bold.checked;
+    const shadowVal = shadow.checked;
+    prev.textContent = val;
+    applyTextStyle(prev, { font: fontVal, size: sizeVal, color: colorVal, stroke: strokeVal, bold: boldVal, shadow: shadowVal });
+    prev.style.fontSize = Math.min(sizeVal, 30) + "px";
   }
 
   // ============================================================
@@ -1137,7 +1146,10 @@ const Editor = (function () {
       renderArrow(selectedEl, selectedEl._data);
     });
 
-    updateTextPreview();
+    // Met à jour l'aperçu initial si les champs existent
+    if (document.getElementById("textPreview") && document.getElementById("textInput")) {
+      updateTextPreview();
+    }
 
     // Resize de la fenêtre → réajuster
     window.addEventListener("resize", () => {
@@ -1186,4 +1198,3 @@ window.saveAnnotation = function() {
 
 // Rendre l'objet Editor accessible globalement
 window.Editor = Editor;
-
