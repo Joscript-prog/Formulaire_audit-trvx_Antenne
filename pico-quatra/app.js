@@ -21,6 +21,44 @@ function getMode() {
     const el = document.getElementById("modeIntervention");
     return (el && el.value === "travaux") ? "travaux" : "audit";
 }
+
+function updateFieldsForMode(mode) {
+    const isTravaux = (mode === 'travaux');
+    
+    // Section 2 : champs techniques
+    const fieldsToHide = ['nb_prises_elec', 'vlan_port'];
+    const radioGroups = ['rj45_optimal', 'devis_desserte', 'vlan_besoin'];
+    
+    fieldsToHide.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.closest('.field-row').style.display = isTravaux ? 'none' : '';
+    });
+    radioGroups.forEach(name => {
+        const container = document.querySelector(`input[name="${name}"]`)?.closest('.field-row');
+        if (container) container.style.display = isTravaux ? 'none' : '';
+    });
+    
+    // Section 3 : titre
+    const measuresTitle = document.getElementById("measuresTitle");
+    if (measuresTitle) {
+        measuresTitle.innerText = isTravaux ? '3. Mesures radio (après intervention)' : '3. Mesures radio (avant intervention)';
+    }
+    
+    // Section 8 : libellés
+    const dureeLabel = document.getElementById("dureeLabel");
+    if (dureeLabel) dureeLabel.innerText = isTravaux ? 'Durée des travaux réalisés' : 'Temps de travaux estimé';
+    
+    const nacelleLabel = document.getElementById("nacelleLabel");
+    if (nacelleLabel) nacelleLabel.innerText = isTravaux ? 'Nacelle utilisée ?' : 'Nacelle à prévoir ?';
+    
+    // Section 9 : titre et champ accès
+    const section9Title = document.getElementById("section9Title");
+    if (section9Title) section9Title.innerText = isTravaux ? 'Synthèse d\'intervention' : '9. Accès site & prérequis';
+    
+    const accesFieldRow = document.getElementById("accesFieldRow");
+    if (accesFieldRow) accesFieldRow.style.display = isTravaux ? 'none' : '';
+}
+
 function setMode(mode) {
     const hidden = document.getElementById("modeIntervention");
     if (hidden) hidden.value = (mode === "travaux") ? "travaux" : "audit";
@@ -30,6 +68,7 @@ function setMode(mode) {
         ba.classList.toggle("active", mode === "audit");
         bt.classList.toggle("active", mode === "travaux");
     }
+    updateFieldsForMode(mode);
 }
 window.setMode = setMode;
 window.getMode = getMode;
@@ -66,6 +105,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
     document.body.addEventListener("click", handleGlobalClick);
     console.log("✅ PICO / Quatra — formulaire chargé");
+    
+    // Appliquer l'état des champs selon le mode initial
+    updateFieldsForMode(getMode());
 });
 
 // =============================================================
@@ -90,7 +132,6 @@ function renderQualiteGrid() {
 function toggleSection(name) {
     const section = document.getElementById("section" + name);
     if (!section) return;
-    // Empêcher le toggle si on clique sur la checkbox d'activation
     section.classList.toggle("collapsed");
 }
 window.toggleSection = toggleSection;
@@ -98,13 +139,10 @@ window.toggleSection = toggleSection;
 function updateSectionState() {
     const picoActive = document.getElementById("activePico").checked;
     const quatraActive = document.getElementById("activeQuatra").checked;
-
     const secPico = document.getElementById("sectionPico");
     const secQuatra = document.getElementById("sectionQuatra");
-
     secPico.classList.toggle("active-pico", picoActive);
     secQuatra.classList.toggle("active-quatra", quatraActive);
-
     document.getElementById("picoBadge").textContent = picoActive ? "✓ Activée" : "Non activée";
     document.getElementById("quatraBadge").textContent = quatraActive ? "✓ Activée" : "Non activée";
 }
@@ -117,7 +155,6 @@ function renderForfaits(type) {
     const container = document.getElementById((type === "Pico" ? "pico" : "quatra") + "ForfaitList");
     const data = (type === "Pico") ? window.PICO_FORFAITS : window.QUATRA_FORFAITS;
     if (!container || !data) return;
-
     container.innerHTML = "";
     const groupName = "forfait_" + type.toLowerCase();
     data.forEach(f => {
@@ -133,7 +170,6 @@ function renderForfaits(type) {
         `;
         const radio = lbl.querySelector("input[type='radio']");
         radio.addEventListener("change", () => {
-            // Désélectionner les autres cartes du même groupe
             container.querySelectorAll(".forfait-card").forEach(c => c.classList.remove("selected"));
             if (radio.checked) lbl.classList.add("selected");
         });
@@ -205,7 +241,6 @@ function analyzeMeasureRow(id) {
         cell.style.background = q.color;
         cell.style.color = "#ffffff";
     }
-    // Rafraîchir les points sur le plan (couleur ET libellé du select)
     if (typeof refreshEvacPointColors === "function") refreshEvacPointColors();
     if (typeof refreshEvacMeasureSelect === "function") refreshEvacMeasureSelect();
 }
@@ -231,8 +266,6 @@ function addMeasureRow() {
         <td><button type="button" class="row-del" onclick="removeMeasureRow('${id}')">✕</button></td>
     `;
     document.getElementById("measuresBody").appendChild(tr);
-
-    // Listeners pour analyse auto + refresh select plan
     document.getElementById(id + "_rsrp").addEventListener("input", () => analyzeMeasureRow(id));
     document.getElementById(id + "_snr").addEventListener("input", () => analyzeMeasureRow(id));
     document.getElementById(id + "_zone").addEventListener("input", () => {
@@ -243,11 +276,8 @@ window.addMeasureRow = addMeasureRow;
 function removeMeasureRow(id) {
     const tr = document.querySelector(`tr[data-measure-id="${id}"]`);
     if (tr) tr.remove();
-    // Si un point évac était lié à cette mesure, on le délie (devient label libre, garde la position)
     evacPoints.forEach(p => {
-        if (p.measureId === id) {
-            p.measureId = null;
-        }
+        if (p.measureId === id) p.measureId = null;
     });
     refreshEvacPointColors();
     refreshEvacMeasureSelect();
@@ -333,11 +363,8 @@ function createPhotoBlock(key, defaultLabel, removable) {
             ${removable ? `<button type="button" class="clear-photo" data-remove-block="${key}" style="background:#6c757d;">🗑 Supprimer le bloc</button>` : ""}
         </div>
     `;
-
-    // Listener pour upload
     const fileInput = block.querySelector('input[type="file"]');
     fileInput.addEventListener("change", (e) => handlePhotoUpload(key, e.target.files[0]));
-
     return block;
 }
 
@@ -405,7 +432,6 @@ function handleGlobalClick(e) {
         }
         return;
     }
-
     const clearBtn = e.target.closest("[data-clear]");
     if (clearBtn) {
         const key = clearBtn.dataset.clear;
@@ -421,7 +447,6 @@ function handleGlobalClick(e) {
         if (fileInput) fileInput.value = "";
         return;
     }
-
     const removeBlockBtn = e.target.closest("[data-remove-block]");
     if (removeBlockBtn) {
         const key = removeBlockBtn.dataset.removeBlock;
@@ -439,7 +464,6 @@ function setupEvacUpload() {
     const area = document.getElementById("evacUploadArea");
     const input = document.getElementById("evacInput");
     if (!area || !input) return;
-
     area.addEventListener("click", () => input.click());
     input.addEventListener("change", async (e) => {
         const file = e.target.files[0];
@@ -467,7 +491,6 @@ function setupEvacUpload() {
 
 let placePointArmed = false;
 
-// Rafraîchir la liste déroulante des mesures pour le picker
 function refreshEvacMeasureSelect() {
     const sel = document.getElementById("evacMeasureSelect");
     if (!sel) return;
@@ -477,7 +500,6 @@ function refreshEvacMeasureSelect() {
         const id = tr.dataset.measureId;
         const zone = (document.getElementById(id + "_zone")?.value || "").trim();
         if (!zone) return;
-        // Vérifier si déjà placé
         const alreadyPlaced = evacPoints.some(p => p.measureId === id);
         const opt = document.createElement("option");
         opt.value = id;
@@ -494,7 +516,7 @@ function refreshEvacMeasureSelect() {
 }
 
 function getMeasureColor(measureId) {
-    if (!measureId) return "#dc2626"; // rouge par défaut
+    if (!measureId) return "#dc2626";
     const r = parseFloat(document.getElementById(measureId + "_rsrp")?.value);
     const s = parseFloat(document.getElementById(measureId + "_snr")?.value);
     const q = evaluateQuality(r, s);
@@ -512,7 +534,6 @@ function armPlacePoint() {
     const measureId = sel.value || null;
     const freeLabel = (labelInput.value || "").trim();
     const label = measureId ? getMeasureLabel(measureId) : freeLabel;
-
     if (!label) {
         showStatus("Sélectionnez une mesure ou entrez un label libre.", "error");
         return;
@@ -521,15 +542,13 @@ function armPlacePoint() {
         showStatus("Cette mesure est déjà placée sur le plan.", "error");
         return;
     }
-
     placePointArmed = true;
     showStatus("👆 Cliquez maintenant sur le plan à l'emplacement souhaité.", "info");
     const container = document.getElementById("planEvacContainer");
     container.style.cursor = "crosshair";
-
     const onClick = (e) => {
         if (!placePointArmed) return;
-        if (e.target.closest(".evac-point")) return; // ne pas placer sur un point existant
+        if (e.target.closest(".evac-point")) return;
         const rect = container.getBoundingClientRect();
         const xPct = ((e.clientX - rect.left) / rect.width) * 100;
         const yPct = ((e.clientY - rect.top) / rect.height) * 100;
@@ -562,13 +581,11 @@ function renderEvacPoint(point) {
     div.style.top = point.yPct + "%";
     div.style.width = point.size + "px";
     div.style.height = point.size + "px";
-
     const color = getMeasureColor(point.measureId);
     const r = parseInt(color.substring(1, 3), 16);
     const g = parseInt(color.substring(3, 5), 16);
     const b = parseInt(color.substring(5, 7), 16);
     const haloBg = `radial-gradient(circle, rgba(${r},${g},${b},0.55) 0%, rgba(${r},${g},${b},0.25) 40%, rgba(${r},${g},${b},0) 75%)`;
-
     div.innerHTML = `
         <span class="evac-halo" style="background:${haloBg};"></span>
         <span class="evac-dot" style="background:${color};"></span>
@@ -579,7 +596,6 @@ function renderEvacPoint(point) {
     container.appendChild(div);
     makeEvacPointDraggable(div, point);
     makeEvacPointResizable(div, point);
-
     div.querySelector(".evac-del").addEventListener("click", (e) => {
         e.stopPropagation();
         const idx = evacPoints.findIndex(p => p.id === point.id);
@@ -681,7 +697,6 @@ function renderFournitures() {
     const container = document.getElementById("fournituresContainer");
     if (!container || !window.FOURNITURES_PICO) return;
     container.innerHTML = "";
-
     window.FOURNITURES_PICO.forEach(catBlock => {
         const cat = document.createElement("div");
         cat.className = "fournitures-cat";
@@ -697,14 +712,10 @@ function renderFournitures() {
                 <span class="unit-tag">${item.unit}</span>
             `;
             list.appendChild(row);
-
-            // Cocher auto si on saisit une quantité
             const qtyInput = row.querySelector(".qty-input");
             const chk = row.querySelector("input[type='checkbox']");
             qtyInput.addEventListener("input", () => {
-                if (qtyInput.value && parseFloat(qtyInput.value) > 0) {
-                    chk.checked = true;
-                }
+                if (qtyInput.value && parseFloat(qtyInput.value) > 0) chk.checked = true;
             });
         });
         container.appendChild(cat);
@@ -731,11 +742,7 @@ function collectMeasures() {
         const snr  = val(id + "_snr");
         const rsrq = val(id + "_rsrq");
         const band = val(id + "_band");
-        // Composer le champ 4G affiché dans le rapport (RSRP/RSRQ/Band)
-        const m4g = (rsrp || rsrq || band)
-            ? [rsrp || "—", rsrq || "—", band || "—"].join("/")
-            : "";
-        // Analyse auto
+        const m4g = (rsrp || rsrq || band) ? [rsrp || "—", rsrq || "—", band || "—"].join("/") : "";
         const r = parseFloat(rsrp);
         const s = parseFloat(snr);
         const q = evaluateQuality(r, s);
@@ -759,9 +766,7 @@ function collectPicoPoses() {
         const id = div.dataset.picoId;
         const zone = val(id + "_zone");
         const note = val(id + "_note");
-        if (zone || note) {
-            list.push({ num: idx + 1, zone, note });
-        }
+        if (zone || note) list.push({ num: idx + 1, zone, note });
     });
     return list;
 }
@@ -795,42 +800,68 @@ function getSelectedForfait(type) {
     return data.find(f => f.ref === sel.value) || null;
 }
 
-function collectAllPhotoKeys() {
-    return Object.keys(photoStore);
+function collectAllFormData() {
+    const mode = getMode();
+    const isTravaux = (mode === 'travaux');
+    return {
+        numero_ot: val("numero_ot"),
+        cdp_bytel: val("cdp_bytel"),
+        auditeur: val("auditeur"),
+        direction: val("direction"),
+        date_audit: val("date_audit"),
+        raison_sociale: val("raison_sociale"),
+        adresse: val("adresse"),
+        code_postal: val("code_postal"),
+        ville: val("ville"),
+        horaire: val("horaire"),
+        procedure_acces: val("procedure_acces"),
+        tel_site: val("tel_site"),
+        contact_nom: val("contact_nom"),
+        contact_fonction: val("contact_fonction"),
+        contact_tel: val("contact_tel"),
+        contact_mail: val("contact_mail"),
+        batiment_classe: radioVal("batiment_classe"),
+        loc_baie: val("loc_baie"),
+        nb_prises_elec: isTravaux ? "" : val("nb_prises_elec"),
+        rj45_optimal: isTravaux ? "" : radioVal("rj45_optimal"),
+        devis_desserte: isTravaux ? "" : radioVal("devis_desserte"),
+        vlan_besoin: isTravaux ? "" : radioVal("vlan_besoin"),
+        vlan_port: isTravaux ? "" : val("vlan_port"),
+        mesures: collectMeasures(),
+        mesures_note: val("mesures_note"),
+        pico_forfait: getSelectedForfait("Pico"),
+        pico_poses: collectPicoPoses(),
+        pico_metrage: val("pico_metrage"),
+        pico_hauteur: val("pico_hauteur"),
+        quatra_forfait: getSelectedForfait("Quatra"),
+        quatra_nb_nu: val("quatra_nb_nu"),
+        quatra_nb_cu: val("quatra_nb_cu"),
+        quatra_metrage_cu: val("quatra_metrage_cu"),
+        fournitures: collectFournitures(),
+        fournitures_libre: val("fournitures_libre"),
+        outils_libre: val("outils_libre"),
+        hauteur_max: val("hauteur_max"),
+        nb_techniciens: val("nb_techniciens"),
+        duree_totale: val("duree_totale"),
+        nacelle_prevoir: radioVal("nacelle_prevoir"),
+        echelle_prevoir: radioVal("echelle_prevoir"),
+        acces_site: isTravaux ? "" : val("acces_site"),
+        solution_validee_par: val("solution_validee_par"),
+        observations: val("observations"),
+        signataire_nom: val("signataire_nom"),
+        signataire_date: val("signataire_date"),
+        photoLabels: collectPhotoLabels()
+    };
 }
 
-// =============================================================
-//  RESET
-// =============================================================
-function resetForm() {
-    if (!confirm("Réinitialiser le formulaire ? Toutes les données saisies seront perdues.")) return;
-    document.querySelectorAll("input, textarea, select").forEach(el => {
-        if (el.id === "modeIntervention") return;
-        if (el.type === "checkbox" || el.type === "radio") el.checked = false;
-        else if (el.type !== "file") el.value = "";
+function collectPhotoLabels() {
+    const labels = {};
+    document.querySelectorAll("[data-photo-label-for]").forEach(inp => {
+        const key = inp.dataset.photoLabelFor;
+        labels[key] = inp.value || "";
     });
-    setMode("audit");
-    Object.keys(photoStore).forEach(k => delete photoStore[k]);
-    document.querySelectorAll(".photo-preview").forEach(p => { p.src = ""; p.classList.remove("shown"); });
-    document.querySelectorAll(".annotate-btn").forEach(b => b.disabled = true);
-    document.querySelectorAll(".forfait-card").forEach(c => c.classList.remove("selected"));
-
-    // Réinitialiser mesures, pico posés, photos dynamiques
-    document.getElementById("measuresBody").innerHTML = "";
-    document.getElementById("picoPosesList").innerHTML = "";
-    document.getElementById("picoPhotoGrid").innerHTML = "";
-    document.getElementById("quatraPhotoGrid").innerHTML = "";
-    measureCounter = picoPoseCounter = picoPhotoCounter = quatraPhotoCounter = 0;
-    addMeasureRow();
-    addPicoPose();
-    setupPicoPhotoBlocks();
-    setupQuatraPhotoBlocks();
-
-    clearPlan();
-    updateSectionState();
-    showStatus("Formulaire réinitialisé.", "success");
+    return labels;
 }
-window.resetForm = resetForm;
 
 // =============================================================
 //  EXPORT / IMPORT JSON
@@ -840,15 +871,12 @@ function buildBaseFilename() {
     const raison = (val("raison_sociale") || "").replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 30);
     const date = val("date_audit") || new Date().toISOString().slice(0, 10);
     const mode = (getMode() === "travaux") ? "TRAVAUX" : "AUDIT";
-
-    // Préfixe selon les sections actives
     const picoActive = document.getElementById("activePico").checked;
     const quatraActive = document.getElementById("activeQuatra").checked;
     let type = "PICO_QUATRA";
     if (picoActive && !quatraActive) type = "PICO";
     else if (!picoActive && quatraActive) type = "QUATRA";
     else if (picoActive && quatraActive) type = "PICO_QUATRA";
-
     let parts = [`${mode}_${type}`];
     if (ref) parts.push(ref);
     if (raison) parts.push(raison);
@@ -872,7 +900,6 @@ async function exportToJSON() {
                 name: p.name || null
             };
         });
-
         const fullExport = {
             version: 1,
             type: "pico-quatra",
@@ -884,7 +911,6 @@ async function exportToJSON() {
             photos,
             evacPoints: evacPoints.slice()
         };
-
         const blob = new Blob([JSON.stringify(fullExport, null, 2)], { type: "application/json" });
         saveAs(blob, buildBaseFilename() + "_BACKUP.json");
         showStatus("✅ Sauvegarde JSON exportée.", "success");
@@ -894,77 +920,6 @@ async function exportToJSON() {
     }
 }
 window.exportToJSON = exportToJSON;
-
-function collectAllFormData() {
-    return {
-        // En-tête
-        numero_ot: val("numero_ot"),
-        cdp_bytel: val("cdp_bytel"),
-        auditeur: val("auditeur"),
-        direction: val("direction"),
-        date_audit: val("date_audit"),
-        // Client
-        raison_sociale: val("raison_sociale"),
-        adresse: val("adresse"),
-        code_postal: val("code_postal"),
-        ville: val("ville"),
-        horaire: val("horaire"),
-        procedure_acces: val("procedure_acces"),
-        tel_site: val("tel_site"),
-        contact_nom: val("contact_nom"),
-        contact_fonction: val("contact_fonction"),
-        contact_tel: val("contact_tel"),
-        contact_mail: val("contact_mail"),
-        // Technique
-        batiment_classe: radioVal("batiment_classe"),
-        loc_baie: val("loc_baie"),
-        nb_prises_elec: val("nb_prises_elec"),
-        rj45_optimal: radioVal("rj45_optimal"),
-        devis_desserte: radioVal("devis_desserte"),
-        vlan_besoin: radioVal("vlan_besoin"),
-        vlan_port: val("vlan_port"),
-        // Mesures
-        mesures: collectMeasures(),
-        mesures_note: val("mesures_note"),
-        // PICO
-        pico_forfait: getSelectedForfait("Pico"),
-        pico_poses: collectPicoPoses(),
-        pico_metrage: val("pico_metrage"),
-        pico_hauteur: val("pico_hauteur"),
-        // Quatra
-        quatra_forfait: getSelectedForfait("Quatra"),
-        quatra_nb_nu: val("quatra_nb_nu"),
-        quatra_nb_cu: val("quatra_nb_cu"),
-        quatra_metrage_cu: val("quatra_metrage_cu"),
-        // Fournitures
-        fournitures: collectFournitures(),
-        fournitures_libre: val("fournitures_libre"),
-        outils_libre: val("outils_libre"),
-        // Mise en œuvre
-        hauteur_max: val("hauteur_max"),
-        nb_techniciens: val("nb_techniciens"),
-        duree_totale: val("duree_totale"),
-        nacelle_prevoir: radioVal("nacelle_prevoir"),
-        echelle_prevoir: radioVal("echelle_prevoir"),
-        // Synthèse
-        acces_site: val("acces_site"),
-        solution_validee_par: val("solution_validee_par"),
-        observations: val("observations"),
-        signataire_nom: val("signataire_nom"),
-        signataire_date: val("signataire_date"),
-        // Photo labels (libellés saisis)
-        photoLabels: collectPhotoLabels()
-    };
-}
-
-function collectPhotoLabels() {
-    const labels = {};
-    document.querySelectorAll("[data-photo-label-for]").forEach(inp => {
-        const key = inp.dataset.photoLabelFor;
-        labels[key] = inp.value || "";
-    });
-    return labels;
-}
 
 async function importFromJSON(file) {
     if (!file) return;
@@ -977,7 +932,6 @@ async function importFromJSON(file) {
         try {
             const data = JSON.parse(e.target.result);
             const fd = data.formData || {};
-
             // Reset visuel sans confirmation
             document.querySelectorAll("input, textarea, select").forEach(el => {
                 if (el.id === "modeIntervention") return;
@@ -988,8 +942,6 @@ async function importFromJSON(file) {
             document.querySelectorAll(".photo-preview").forEach(p => { p.src = ""; p.classList.remove("shown"); });
             document.querySelectorAll(".annotate-btn").forEach(b => b.disabled = true);
             document.querySelectorAll(".forfait-card").forEach(c => c.classList.remove("selected"));
-
-            // Reset mesures / pico-poses / photos dynamiques
             document.getElementById("measuresBody").innerHTML = "";
             document.getElementById("picoPosesList").innerHTML = "";
             document.getElementById("picoPhotoGrid").innerHTML = "";
@@ -997,15 +949,9 @@ async function importFromJSON(file) {
             measureCounter = picoPoseCounter = picoPhotoCounter = quatraPhotoCounter = 0;
             evacPoints.length = 0;
             document.querySelectorAll(".evac-point").forEach(p => p.remove());
-
-            // Mode
             setMode(data.mode === "travaux" ? "travaux" : "audit");
-
-            // Sections actives
             document.getElementById("activePico").checked = !!data.picoActive;
             document.getElementById("activeQuatra").checked = !!data.quatraActive;
-
-            // Champs simples
             const TEXT_FIELDS = [
                 "numero_ot", "cdp_bytel", "auditeur", "direction", "date_audit",
                 "raison_sociale", "adresse", "code_postal", "ville", "horaire", "procedure_acces",
@@ -1022,8 +968,6 @@ async function importFromJSON(file) {
                 const el = document.getElementById(id);
                 if (el && fd[id] !== undefined && fd[id] !== null) el.value = fd[id];
             });
-
-            // Radios
             ["batiment_classe", "rj45_optimal", "devis_desserte", "vlan_besoin",
              "nacelle_prevoir", "echelle_prevoir"].forEach(name => {
                 const v = fd[name];
@@ -1032,8 +976,6 @@ async function importFromJSON(file) {
                     if (r) r.checked = true;
                 }
             });
-
-            // Mesures
             (fd.mesures || []).forEach(m => {
                 addMeasureRow();
                 const id = "m_" + measureCounter;
@@ -1042,7 +984,6 @@ async function importFromJSON(file) {
                 document.getElementById(id + "_snr").value  = m.snr  || "";
                 document.getElementById(id + "_rsrq").value = m.rsrq || "";
                 document.getElementById(id + "_band").value = m.band || "";
-                // Compatibilité ascendante : ancien format avec m4g composé
                 if (!m.rsrp && !m.rsrq && !m.band && m.m4g) {
                     const parts = String(m.m4g).split("/");
                     if (parts[0]) document.getElementById(id + "_rsrp").value = parts[0].trim();
@@ -1055,8 +996,6 @@ async function importFromJSON(file) {
                 analyzeMeasureRow(id);
             });
             if ((fd.mesures || []).length === 0) addMeasureRow();
-
-            // Pico posés
             (fd.pico_poses || []).forEach(p => {
                 addPicoPose();
                 const id = "pp_" + picoPoseCounter;
@@ -1064,26 +1003,15 @@ async function importFromJSON(file) {
                 document.getElementById(id + "_note").value = p.note || "";
             });
             if ((fd.pico_poses || []).length === 0) addPicoPose();
-
-            // Forfait pico
             if (fd.pico_forfait && fd.pico_forfait.ref) {
                 const r = document.querySelector(`input[name="forfait_pico"][value="${fd.pico_forfait.ref}"]`);
-                if (r) {
-                    r.checked = true;
-                    r.closest(".forfait-card").classList.add("selected");
-                }
+                if (r) { r.checked = true; r.closest(".forfait-card").classList.add("selected"); }
             }
             if (fd.quatra_forfait && fd.quatra_forfait.ref) {
                 const r = document.querySelector(`input[name="forfait_quatra"][value="${fd.quatra_forfait.ref}"]`);
-                if (r) {
-                    r.checked = true;
-                    r.closest(".forfait-card").classList.add("selected");
-                }
+                if (r) { r.checked = true; r.closest(".forfait-card").classList.add("selected"); }
             }
-
-            // Fournitures
             (fd.fournitures || []).forEach(f => {
-                // Re-trouver l'item par label
                 window.FOURNITURES_PICO.forEach(catBlock => {
                     catBlock.items.forEach(item => {
                         if (item.label === f.label) {
@@ -1095,15 +1023,10 @@ async function importFromJSON(file) {
                     });
                 });
             });
-
-            // Photos : recréer les blocs personnalisés et restaurer les images
             const photos = data.photos || {};
             const labels = fd.photoLabels || {};
-
-            // Photos PICO et Quatra : on recrée les blocs en fonction des clés présentes
             const picoKeys = Object.keys(photos).filter(k => k.startsWith("pico_photo_"));
             const quatraKeys = Object.keys(photos).filter(k => k.startsWith("quatra_photo_"));
-
             if (picoKeys.length > 0) {
                 document.getElementById("picoPhotoGrid").innerHTML = "";
                 picoPhotoCounter = 0;
@@ -1115,7 +1038,6 @@ async function importFromJSON(file) {
             } else {
                 setupPicoPhotoBlocks();
             }
-
             if (quatraKeys.length > 0) {
                 document.getElementById("quatraPhotoGrid").innerHTML = "";
                 quatraPhotoCounter = 0;
@@ -1127,8 +1049,6 @@ async function importFromJSON(file) {
             } else {
                 setupQuatraPhotoBlocks();
             }
-
-            // Restaurer les photos dans photoStore et les previews
             Object.entries(photos).forEach(([key, p]) => {
                 photoStore[key] = {
                     dataUrl: p.dataUrl,
@@ -1148,18 +1068,13 @@ async function importFromJSON(file) {
                 const annBtn = document.querySelector(`[data-annotate="${key}"]`);
                 if (annBtn) annBtn.disabled = false;
             });
-
-            // Plan d'évacuation
             if (photos.plan_evac && photos.plan_evac.dataUrl) {
                 document.getElementById("planEvacImg").src = photos.plan_evac.dataUrl;
                 document.getElementById("planEvacContainer").classList.add("shown");
                 document.getElementById("evacAddControls").style.display = "flex";
                 document.getElementById("evacUploadArea").style.display = "none";
                 refreshEvacMeasureSelect();
-
-                // Restaurer les points
                 (data.evacPoints || []).forEach(pt => {
-                    // Compatibilité ascendante : ajouter size si absent
                     if (!pt.size) pt.size = 80;
                     if (!("measureId" in pt)) pt.measureId = null;
                     evacPoints.push({ ...pt });
@@ -1171,7 +1086,6 @@ async function importFromJSON(file) {
                 });
                 refreshEvacMeasureSelect();
             }
-
             updateSectionState();
             document.getElementById("importJsonInput").value = "";
             showStatus("✅ Sauvegarde importée.", "success");
@@ -1187,8 +1101,6 @@ window.importFromJSON = importFromJSON;
 // =============================================================
 //  GÉNÉRATION DU RAPPORT WORD
 // =============================================================
-
-// Couleurs reprises du style 4G/5G pour cohérence
 const COLOR_TITLE = "1F3864";
 const COLOR_SUBTITLE = "2E75B6";
 const COLOR_TABLE_LABEL = "F2F2F2";
@@ -1198,421 +1110,113 @@ const COLOR_HEADER_BG = "2E5481";
 
 async function generateReport() {
     showStatus("⏳ Génération du rapport en cours...", "info");
-
     try {
         await window.__libsLoaded;
-        if (typeof docx === "undefined") {
-            throw new Error("La bibliothèque docx n'a pas pu être chargée.");
-        }
-
-        const {
-            Document, Paragraph, TextRun, Table, TableRow, TableCell,
-            ImageRun, AlignmentType, WidthType, BorderStyle, ShadingType,
-            VerticalAlign, HeightRule, Footer, Header, PageNumber,
-            HeadingLevel, Packer, LevelFormat, PageOrientation
-        } = docx;
-
-        const noBorders = {
-            top:    { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
-            bottom: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
-            left:   { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
-            right:  { style: BorderStyle.NONE, size: 0, color: "FFFFFF" }
-        };
-
-        // Décodeur base64 → Uint8Array (utilisé aussi pour les logos)
-        const b64 = (s) => {
-            const binary = atob(s);
-            const bytes = new Uint8Array(binary.length);
-            for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-            return bytes;
-        };
-
+        if (typeof docx === "undefined") throw new Error("La bibliothèque docx n'a pas pu être chargée.");
+        const { Document, Paragraph, TextRun, Table, TableRow, TableCell, ImageRun, AlignmentType, WidthType, BorderStyle, ShadingType, VerticalAlign, HeightRule, Footer, Header, PageNumber, HeadingLevel, Packer, LevelFormat, PageOrientation } = docx;
+        const noBorders = { top: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" }, bottom: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" }, left: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" }, right: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" } };
+        const b64 = (s) => { const binary = atob(s); const bytes = new Uint8Array(binary.length); for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i); return bytes; };
         const FONT = "Calibri";
         const stdBorder = { style: BorderStyle.SINGLE, size: 4, color: COLOR_BORDER };
         const stdBorders = { top: stdBorder, bottom: stdBorder, left: stdBorder, right: stdBorder };
-
-        // Helpers
-        const P = (text, opts) => new Paragraph({
-            spacing: { before: 80, after: 80 },
-            ...(opts || {}),
-            children: Array.isArray(text)
-                ? text
-                : [new TextRun({ text: text || "", font: FONT, size: 22, ...(opts && opts.runOpts || {}) })]
-        });
-
-        const H = (text, level) => new Paragraph({
-            spacing: { before: 240, after: 120 },
-            children: [new TextRun({
-                text, bold: true, font: FONT,
-                size: level === 1 ? 30 : (level === 2 ? 26 : 22),
-                color: level === 1 ? COLOR_TITLE : COLOR_SUBTITLE
-            })]
-        });
-
-        const cellText = (text, opts) => new TableCell({
-            width: opts && opts.width ? { size: opts.width, type: WidthType.DXA } : undefined,
-            shading: opts && opts.shading ? { fill: opts.shading, type: ShadingType.CLEAR, color: "auto" } : undefined,
-            margins: { top: 80, bottom: 80, left: 100, right: 100 },
-            borders: stdBorders,
-            verticalAlign: VerticalAlign.CENTER,
-            children: [new Paragraph({
-                alignment: opts && opts.align ? opts.align : AlignmentType.LEFT,
-                children: [new TextRun({
-                    text: text || "",
-                    font: FONT,
-                    size: 20,
-                    bold: !!(opts && opts.bold),
-                    color: opts && opts.color ? opts.color : "000000"
-                })]
-            })]
-        });
-
-        // Helper : convertir dataURL → Uint8Array
-        function dataUrlToBytes(dataUrl) {
-            const base64 = dataUrl.split(",")[1];
-            const binary = atob(base64);
-            const bytes = new Uint8Array(binary.length);
-            for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-            return bytes;
-        }
-
-        // Helper : récupérer une photo prête pour ImageRun en respectant le ratio
-        // maxW et maxH sont les bornes ; l'image conserve son ratio natif
+        const P = (text, opts) => new Paragraph({ spacing: { before: 80, after: 80 }, ...(opts || {}), children: Array.isArray(text) ? text : [new TextRun({ text: text || "", font: FONT, size: 22, ...(opts && opts.runOpts || {}) })] });
+        const H = (text, level) => new Paragraph({ spacing: { before: 240, after: 120 }, children: [new TextRun({ text, bold: true, font: FONT, size: level === 1 ? 30 : (level === 2 ? 26 : 22), color: level === 1 ? COLOR_TITLE : COLOR_SUBTITLE })] });
+        const cellText = (text, opts) => new TableCell({ width: opts && opts.width ? { size: opts.width, type: WidthType.DXA } : undefined, shading: opts && opts.shading ? { fill: opts.shading, type: ShadingType.CLEAR, color: "auto" } : undefined, margins: { top: 80, bottom: 80, left: 100, right: 100 }, borders: stdBorders, verticalAlign: VerticalAlign.CENTER, children: [new Paragraph({ alignment: opts && opts.align ? opts.align : AlignmentType.LEFT, children: [new TextRun({ text: text || "", font: FONT, size: 20, bold: !!(opts && opts.bold), color: opts && opts.color ? opts.color : "000000" })] })] });
+        function dataUrlToBytes(dataUrl) { const base64 = dataUrl.split(",")[1]; const binary = atob(base64); const bytes = new Uint8Array(binary.length); for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i); return bytes; }
         async function getPhotoImageRun(key, maxW, maxH) {
             const p = photoStore[key];
             if (!p || !p.dataUrl) return null;
             try {
-                // Calcul du ratio natif via Image()
-                const dims = await new Promise((resolve) => {
-                    const img = new Image();
-                    img.onload = () => resolve({ w: img.naturalWidth, h: img.naturalHeight });
-                    img.onerror = () => resolve({ w: maxW, h: maxH });
-                    img.src = p.dataUrl;
-                });
+                const dims = await new Promise((resolve) => { const img = new Image(); img.onload = () => resolve({ w: img.naturalWidth, h: img.naturalHeight }); img.onerror = () => resolve({ w: maxW, h: maxH }); img.src = p.dataUrl; });
                 const ratio = dims.w / dims.h;
                 let w = maxW, h = Math.round(maxW / ratio);
-                if (h > maxH) {
-                    h = maxH;
-                    w = Math.round(maxH * ratio);
-                }
-                return new ImageRun({
-                    data: dataUrlToBytes(p.dataUrl),
-                    transformation: { width: w, height: h },
-                    type: (p.type === "png") ? "png" : "jpg"
-                });
-            } catch (err) {
-                console.warn("Photo invalide", key, err);
-                return null;
-            }
+                if (h > maxH) { h = maxH; w = Math.round(maxH * ratio); }
+                return new ImageRun({ data: dataUrlToBytes(p.dataUrl), transformation: { width: w, height: h }, type: (p.type === "png") ? "png" : "jpg" });
+            } catch (err) { console.warn("Photo invalide", key, err); return null; }
         }
-
         const mode = getMode();
+        const isTravaux = (mode === 'travaux');
         const picoActive = document.getElementById("activePico").checked;
         const quatraActive = document.getElementById("activeQuatra").checked;
-
-        // Titre du rapport
         let typeLabel = "";
         if (picoActive && quatraActive) typeLabel = "PICO BTS + CEL-FI QUATRA";
         else if (picoActive) typeLabel = "INSTALLATION PICO BTS";
         else if (quatraActive) typeLabel = "INSTALLATION CEL-FI QUATRA";
         else typeLabel = "PICO / CEL-FI QUATRA";
         const titreRapport = ((mode === "travaux") ? "RAPPORT DE TRAVAUX - " : "RAPPORT D'AUDIT - ") + typeLabel;
-
-        // ============ CONSTRUCTION DU DOCUMENT ============
         const children = [];
-
-        // Bandeau titre principal
-        children.push(new Table({
-            width: { size: 9360, type: WidthType.DXA },
-            alignment: AlignmentType.CENTER,
-            columnWidths: [9360],
-            rows: [new TableRow({
-                children: [new TableCell({
-                    width: { size: 9360, type: WidthType.DXA },
-                    shading: { fill: COLOR_HEADER_BG, type: ShadingType.CLEAR, color: "auto" },
-                    margins: { top: 240, bottom: 200, left: 200, right: 200 },
-                    borders: stdBorders,
-                    children: [
-                        new Paragraph({
-                            alignment: AlignmentType.CENTER,
-                            children: [new TextRun({
-                                text: titreRapport,
-                                bold: true, size: 32, color: COLOR_WHITE, font: FONT
-                            })]
-                        }),
-                        new Paragraph({
-                            alignment: AlignmentType.CENTER,
-                            spacing: { before: 80 },
-                            children: [new TextRun({
-                                text: "Bouygues Telecom | IPKONEKT",
-                                size: 22, color: COLOR_WHITE, font: FONT
-                            })]
-                        })
-                    ]
-                })]
-            })]
-        }));
-
+        children.push(new Table({ width: { size: 9360, type: WidthType.DXA }, alignment: AlignmentType.CENTER, columnWidths: [9360], rows: [new TableRow({ children: [new TableCell({ width: { size: 9360, type: WidthType.DXA }, shading: { fill: COLOR_HEADER_BG, type: ShadingType.CLEAR, color: "auto" }, margins: { top: 240, bottom: 200, left: 200, right: 200 }, borders: stdBorders, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: titreRapport, bold: true, size: 32, color: COLOR_WHITE, font: FONT })] }), new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 80 }, children: [new TextRun({ text: "Bouygues Telecom | IPKONEKT", size: 22, color: COLOR_WHITE, font: FONT })] })] })] })] }));
         children.push(P(""));
-
-        // Tableau d'en-tête (info OT, contact, date)
-        const hdrRows = [
-            ["Numéro d'OT", val("numero_ot")],
-            ["CDP Bytel", val("cdp_bytel")],
-            ["Auditeur / Intervenant", val("auditeur")],
-            ["Direction / Service", val("direction")],
-            ["Date d'intervention", val("date_audit")]
-        ].filter(r => r[1] && r[1].trim());
-
+        const hdrRows = [ ["Numéro d'OT", val("numero_ot")], ["CDP Bytel", val("cdp_bytel")], ["Auditeur / Intervenant", val("auditeur")], ["Direction / Service", val("direction")], ["Date d'intervention", val("date_audit")] ].filter(r => r[1] && r[1].trim());
         if (hdrRows.length > 0) {
-            children.push(new Table({
-                width: { size: 9360, type: WidthType.DXA },
-                alignment: AlignmentType.CENTER,
-                columnWidths: [3120, 6240],
-                rows: hdrRows.map(([k, v]) => new TableRow({
-                    children: [
-                        cellText(k, { width: 3120, shading: COLOR_TABLE_LABEL, bold: true }),
-                        cellText(v, { width: 6240 })
-                    ]
-                }))
-            }));
+            children.push(new Table({ width: { size: 9360, type: WidthType.DXA }, alignment: AlignmentType.CENTER, columnWidths: [3120, 6240], rows: hdrRows.map(([k, v]) => new TableRow({ children: [ cellText(k, { width: 3120, shading: COLOR_TABLE_LABEL, bold: true }), cellText(v, { width: 6240 }) ] })) }));
             children.push(P(""));
         }
-
-        // ===== 1. INFOS CLIENT =====
         children.push(H("1. Informations administratives du client", 1));
-        const clientRows = [
-            ["Raison sociale", val("raison_sociale")],
-            ["Adresse", [val("adresse"), val("code_postal"), val("ville")].filter(x => x).join(" ")],
-            ["Horaire d'ouverture", val("horaire")],
-            ["Procédure d'accès", val("procedure_acces")],
-            ["Téléphone du site", val("tel_site")],
-            ["Contact", [val("contact_nom"), val("contact_fonction")].filter(x => x).join(" — ")],
-            ["Téléphone du contact", val("contact_tel")],
-            ["Mail du contact", val("contact_mail")]
-        ].filter(r => r[1] && r[1].trim());
-
-        if (clientRows.length > 0) {
-            children.push(new Table({
-                width: { size: 9360, type: WidthType.DXA },
-                alignment: AlignmentType.CENTER,
-                columnWidths: [3120, 6240],
-                rows: clientRows.map(([k, v]) => new TableRow({
-                    children: [
-                        cellText(k, { width: 3120, shading: COLOR_TABLE_LABEL, bold: true }),
-                        cellText(v, { width: 6240 })
-                    ]
-                }))
-            }));
-        }
-
-        // ===== 2. INFOS TECHNIQUES =====
+        const clientRows = [ ["Raison sociale", val("raison_sociale")], ["Adresse", [val("adresse"), val("code_postal"), val("ville")].filter(x => x).join(" ")], ["Horaire d'ouverture", val("horaire")], ["Procédure d'accès", val("procedure_acces")], ["Téléphone du site", val("tel_site")], ["Contact", [val("contact_nom"), val("contact_fonction")].filter(x => x).join(" — ")], ["Téléphone du contact", val("contact_tel")], ["Mail du contact", val("contact_mail")] ].filter(r => r[1] && r[1].trim());
+        if (clientRows.length > 0) children.push(new Table({ width: { size: 9360, type: WidthType.DXA }, alignment: AlignmentType.CENTER, columnWidths: [3120, 6240], rows: clientRows.map(([k, v]) => new TableRow({ children: [ cellText(k, { width: 3120, shading: COLOR_TABLE_LABEL, bold: true }), cellText(v, { width: 6240 }) ] })) }));
         children.push(H("2. Informations techniques client", 1));
         const techRows = [
             ["Bâtiment classé", radioVal("batiment_classe")],
             ["Localisation de la baie informatique", val("loc_baie")],
-            ["Nb de prises électriques disponibles", val("nb_prises_elec")],
-            ["Prise RJ45 à l'emplacement optimal", radioVal("rj45_optimal")],
-            ["Devis desserte à prévoir", radioVal("devis_desserte")],
-            ["Besoin VLAN", radioVal("vlan_besoin")],
-            ["Si VLAN, sur quel port", val("vlan_port")]
+            ...(!isTravaux ? [
+                ["Nb de prises électriques disponibles", val("nb_prises_elec")],
+                ["Prise RJ45 à l'emplacement optimal", radioVal("rj45_optimal")],
+                ["Devis desserte à prévoir", radioVal("devis_desserte")],
+                ["Besoin VLAN", radioVal("vlan_besoin")],
+                ["Si VLAN, sur quel port", val("vlan_port")]
+            ] : [])
         ].filter(r => r[1] && r[1].trim());
-
-        if (techRows.length > 0) {
-            children.push(new Table({
-                width: { size: 9360, type: WidthType.DXA },
-                alignment: AlignmentType.CENTER,
-                columnWidths: [4680, 4680],
-                rows: techRows.map(([k, v]) => new TableRow({
-                    children: [
-                        cellText(k, { width: 4680, shading: COLOR_TABLE_LABEL, bold: true }),
-                        cellText(v, { width: 4680 })
-                    ]
-                }))
-            }));
-        }
-
-        // ===== 3. MESURES RADIO =====
-        children.push(H("3. Mesures radio (avant intervention)", 1));
+        if (techRows.length > 0) children.push(new Table({ width: { size: 9360, type: WidthType.DXA }, alignment: AlignmentType.CENTER, columnWidths: [4680, 4680], rows: techRows.map(([k, v]) => new TableRow({ children: [ cellText(k, { width: 4680, shading: COLOR_TABLE_LABEL, bold: true }), cellText(v, { width: 4680 }) ] })) }));
+        children.push(H("3. Mesures radio", 1));
         children.push(P("Tests réalisés avec l'application Network Cell Info Lite.", { runOpts: { italics: true, color: "555555" } }));
-
-        // Grille qualité
         children.push(H("État de la couverture radio", 2));
-        children.push(new Table({
-            width: { size: 9360, type: WidthType.DXA },
-            alignment: AlignmentType.CENTER,
-            columnWidths: [3120, 6240],
-            rows: [
-                new TableRow({
-                    children: [
-                        cellText("Qualité couverture", { width: 3120, shading: COLOR_SUBTITLE, color: COLOR_WHITE, bold: true }),
-                        cellText("4G", { width: 6240, shading: COLOR_SUBTITLE, color: COLOR_WHITE, bold: true, align: AlignmentType.CENTER })
-                    ]
-                }),
-                new TableRow({ children: [cellText("Bonne", { width: 3120, bold: true }), cellText("> -97 dBm", { width: 6240 })] }),
-                new TableRow({ children: [cellText("Moyenne", { width: 3120, bold: true }), cellText("-98 dBm < X < -107 dBm", { width: 6240 })] }),
-                new TableRow({ children: [cellText("Médiocre", { width: 3120, bold: true }), cellText("-108 dBm < X < -117 dBm", { width: 6240 })] }),
-                new TableRow({ children: [cellText("Mauvaise", { width: 3120, bold: true }), cellText("> -118 dBm", { width: 6240 })] }),
-                new TableRow({ children: [cellText("Inexistante", { width: 3120, bold: true }), cellText("Pas de couverture", { width: 6240 })] })
-            ]
-        }));
-
-        // Tableau des points de mesure
+        children.push(new Table({ width: { size: 9360, type: WidthType.DXA }, alignment: AlignmentType.CENTER, columnWidths: [3120, 6240], rows: [ new TableRow({ children: [ cellText("Qualité couverture", { width: 3120, shading: COLOR_SUBTITLE, color: COLOR_WHITE, bold: true }), cellText("4G", { width: 6240, shading: COLOR_SUBTITLE, color: COLOR_WHITE, bold: true, align: AlignmentType.CENTER }) ] }), new TableRow({ children: [cellText("Bonne", { width: 3120, bold: true }), cellText("> -97 dBm", { width: 6240 })] }), new TableRow({ children: [cellText("Moyenne", { width: 3120, bold: true }), cellText("-98 dBm < X < -107 dBm", { width: 6240 })] }), new TableRow({ children: [cellText("Médiocre", { width: 3120, bold: true }), cellText("-108 dBm < X < -117 dBm", { width: 6240 })] }), new TableRow({ children: [cellText("Mauvaise", { width: 3120, bold: true }), cellText("> -118 dBm", { width: 6240 })] }), new TableRow({ children: [cellText("Inexistante", { width: 3120, bold: true }), cellText("Pas de couverture", { width: 6240 })] }) ] }));
         const mesures = collectMeasures().filter(m => m.zone || m.m4g || m.m5g || m.rsrp);
         if (mesures.length > 0) {
             children.push(H("Points de mesure", 2));
-            const mesureRows = [
-                new TableRow({
-                    tableHeader: true,
-                    children: [
-                        cellText("Point de mesure", { width: 1880, shading: COLOR_SUBTITLE, color: COLOR_WHITE, bold: true }),
-                        cellText("4G (RSRP/SNR/RSRQ/Band)", { width: 2080, shading: COLOR_SUBTITLE, color: COLOR_WHITE, bold: true, align: AlignmentType.CENTER }),
-                        cellText("5G (RSRP/RSRQ/Band)", { width: 1880, shading: COLOR_SUBTITLE, color: COLOR_WHITE, bold: true, align: AlignmentType.CENTER }),
-                        cellText("↓ Mb", { width: 880, shading: COLOR_SUBTITLE, color: COLOR_WHITE, bold: true, align: AlignmentType.CENTER }),
-                        cellText("↑ Mb", { width: 880, shading: COLOR_SUBTITLE, color: COLOR_WHITE, bold: true, align: AlignmentType.CENTER }),
-                        cellText("Analyse auto", { width: 1760, shading: COLOR_SUBTITLE, color: COLOR_WHITE, bold: true, align: AlignmentType.CENTER })
-                    ]
-                })
-            ];
+            const mesureRows = [ new TableRow({ tableHeader: true, children: [ cellText("Point de mesure", { width: 1880, shading: COLOR_SUBTITLE, color: COLOR_WHITE, bold: true }), cellText("4G (RSRP/SNR/RSRQ/Band)", { width: 2080, shading: COLOR_SUBTITLE, color: COLOR_WHITE, bold: true, align: AlignmentType.CENTER }), cellText("5G (RSRP/RSRQ/Band)", { width: 1880, shading: COLOR_SUBTITLE, color: COLOR_WHITE, bold: true, align: AlignmentType.CENTER }), cellText("↓ Mb", { width: 880, shading: COLOR_SUBTITLE, color: COLOR_WHITE, bold: true, align: AlignmentType.CENTER }), cellText("↑ Mb", { width: 880, shading: COLOR_SUBTITLE, color: COLOR_WHITE, bold: true, align: AlignmentType.CENTER }), cellText("Analyse auto", { width: 1760, shading: COLOR_SUBTITLE, color: COLOR_WHITE, bold: true, align: AlignmentType.CENTER }) ] }) ];
             mesures.forEach(m => {
-                // Concat 4G : RSRP/SNR/RSRQ/Band
-                const m4g = [m.rsrp, m.snr, m.rsrq, m.band]
-                    .map(x => (x === undefined || x === null || x === "") ? "—" : x)
-                    .join("/");
-                mesureRows.push(new TableRow({
-                    children: [
-                        cellText(m.zone || "—", { width: 1880, bold: true }),
-                        cellText(m4g, { width: 2080, align: AlignmentType.CENTER }),
-                        cellText(m.m5g || "—", { width: 1880, align: AlignmentType.CENTER }),
-                        cellText(m.dn || "—", { width: 880, align: AlignmentType.CENTER }),
-                        cellText(m.up || "—", { width: 880, align: AlignmentType.CENTER }),
-                        cellText(
-                            m.qualite || "—",
-                            {
-                                width: 1760,
-                                align: AlignmentType.CENTER,
-                                bold: !!m.qualite,
-                                shading: m.qualiteColor || undefined,
-                                color: m.qualite ? COLOR_WHITE : "000000"
-                            }
-                        )
-                    ]
-                }));
+                const m4g = [m.rsrp, m.snr, m.rsrq, m.band].map(x => (x === undefined || x === null || x === "") ? "—" : x).join("/");
+                mesureRows.push(new TableRow({ children: [ cellText(m.zone || "—", { width: 1880, bold: true }), cellText(m4g, { width: 2080, align: AlignmentType.CENTER }), cellText(m.m5g || "—", { width: 1880, align: AlignmentType.CENTER }), cellText(m.dn || "—", { width: 880, align: AlignmentType.CENTER }), cellText(m.up || "—", { width: 880, align: AlignmentType.CENTER }), cellText( m.qualite || "—", { width: 1760, align: AlignmentType.CENTER, bold: !!m.qualite, shading: m.qualiteColor ? "#" + m.qualiteColor : undefined, color: m.qualite ? COLOR_WHITE : "000000" }) ] }));
             });
-            children.push(new Table({
-                width: { size: 9360, type: WidthType.DXA },
-                alignment: AlignmentType.CENTER,
-                columnWidths: [1880, 2080, 1880, 880, 880, 1760],
-                rows: mesureRows
-            }));
+            children.push(new Table({ width: { size: 9360, type: WidthType.DXA }, alignment: AlignmentType.CENTER, columnWidths: [1880, 2080, 1880, 880, 880, 1760], rows: mesureRows }));
         }
-
         const mesureNote = val("mesures_note");
-        if (mesureNote.trim()) {
-            children.push(P(""));
-            children.push(P(mesureNote, { runOpts: { italics: true } }));
-        }
-
-        // Synthèse globale de l'analyse auto
+        if (mesureNote.trim()) { children.push(P("")); children.push(P(mesureNote, { runOpts: { italics: true } })); }
         if (mesures.length > 0) {
             const stats = {};
             let totalAnalysed = 0;
-            mesures.forEach(m => {
-                if (m.qualite) {
-                    stats[m.qualite] = (stats[m.qualite] || 0) + 1;
-                    totalAnalysed++;
-                }
-            });
-            if (totalAnalysed > 0) {
-                children.push(H("Synthèse de l'analyse automatique", 2));
-                const summary = Object.entries(stats)
-                    .map(([k, v]) => `${v} point${v > 1 ? "s" : ""} en qualité « ${k} »`)
-                    .join(" • ");
-                children.push(P(`Sur ${totalAnalysed} point${totalAnalysed > 1 ? "s" : ""} analysé${totalAnalysed > 1 ? "s" : ""} (RSRP + SNR renseignés) : ${summary}.`,
-                    { runOpts: { italics: true, color: "555555" } }));
-            }
+            mesures.forEach(m => { if (m.qualite) { stats[m.qualite] = (stats[m.qualite] || 0) + 1; totalAnalysed++; } });
+            if (totalAnalysed > 0) { children.push(H("Synthèse de l'analyse automatique", 2)); const summary = Object.entries(stats).map(([k, v]) => `${v} point${v > 1 ? "s" : ""} en qualité « ${k} »`).join(" • "); children.push(P(`Sur ${totalAnalysed} point${totalAnalysed > 1 ? "s" : ""} analysé${totalAnalysed > 1 ? "s" : ""} (RSRP + SNR renseignés) : ${summary}.`, { runOpts: { italics: true, color: "555555" } })); }
         }
-
-        // ===== 4. PLAN D'IMPLANTATION =====
         if (photoStore["plan_evac"]) {
             children.push(H("4. Plan d'implantation / d'évacuation", 1));
             const planImg = await renderPlanWithPoints();
             if (planImg) {
-                // Calculer le ratio pour respecter les proportions
-                const planDims = await new Promise((resolve) => {
-                    const img = new Image();
-                    img.onload = () => resolve({ w: img.naturalWidth, h: img.naturalHeight });
-                    img.onerror = () => resolve({ w: 600, h: 380 });
-                    img.src = planImg;
-                });
+                const planDims = await new Promise((resolve) => { const img = new Image(); img.onload = () => resolve({ w: img.naturalWidth, h: img.naturalHeight }); img.onerror = () => resolve({ w: 600, h: 380 }); img.src = planImg; });
                 const maxW = 600, maxH = 420;
                 const ratio = planDims.w / planDims.h;
                 let pw = maxW, ph = Math.round(maxW / ratio);
                 if (ph > maxH) { ph = maxH; pw = Math.round(maxH * ratio); }
-                children.push(new Paragraph({
-                    alignment: AlignmentType.CENTER,
-                    children: [new ImageRun({
-                        data: dataUrlToBytes(planImg),
-                        transformation: { width: pw, height: ph },
-                        type: "png"
-                    })]
-                }));
+                children.push(new Paragraph({ alignment: AlignmentType.CENTER, children: [new ImageRun({ data: dataUrlToBytes(planImg), transformation: { width: pw, height: ph }, type: "png" })] }));
             }
-            if (evacPoints.length > 0) {
-                children.push(P("Légende : " + evacPoints.map(p => p.label).join(" • "),
-                    { runOpts: { italics: true, color: "555555" } }));
-            }
+            if (evacPoints.length > 0) children.push(P("Légende : " + evacPoints.map(p => p.label).join(" • "), { runOpts: { italics: true, color: "555555" } }));
         }
-
-        // ===== 5. SECTION PICO =====
         if (picoActive) {
             children.push(H("5. Mise en place de la solution PICO BTS", 1));
-
             const picoForfait = getSelectedForfait("Pico");
             if (picoForfait) {
                 children.push(H("5.1 Forfait retenu", 2));
-                children.push(new Table({
-                    width: { size: 9360, type: WidthType.DXA },
-                    alignment: AlignmentType.CENTER,
-                    columnWidths: [2080, 7280],
-                    rows: [
-                        new TableRow({ children: [cellText("Référence", { width: 2080, shading: COLOR_TABLE_LABEL, bold: true }), cellText(picoForfait.ref, { width: 7280 })] }),
-                        new TableRow({ children: [cellText("Forfait", { width: 2080, shading: COLOR_TABLE_LABEL, bold: true }), cellText(picoForfait.label, { width: 7280, bold: true })] }),
-                        new TableRow({ children: [cellText("Description", { width: 2080, shading: COLOR_TABLE_LABEL, bold: true }), cellText(picoForfait.description, { width: 7280 })] }),
-                        new TableRow({ children: [cellText("Critères", { width: 2080, shading: COLOR_TABLE_LABEL, bold: true }), cellText(picoForfait.critere, { width: 7280 })] })
-                    ]
-                }));
+                children.push(new Table({ width: { size: 9360, type: WidthType.DXA }, alignment: AlignmentType.CENTER, columnWidths: [2080, 7280], rows: [ new TableRow({ children: [cellText("Référence", { width: 2080, shading: COLOR_TABLE_LABEL, bold: true }), cellText(picoForfait.ref, { width: 7280 })] }), new TableRow({ children: [cellText("Forfait", { width: 2080, shading: COLOR_TABLE_LABEL, bold: true }), cellText(picoForfait.label, { width: 7280, bold: true })] }), new TableRow({ children: [cellText("Description", { width: 2080, shading: COLOR_TABLE_LABEL, bold: true }), cellText(picoForfait.description, { width: 7280 })] }), new TableRow({ children: [cellText("Critères", { width: 2080, shading: COLOR_TABLE_LABEL, bold: true }), cellText(picoForfait.critere, { width: 7280 })] }) ] }));
             }
-
             const picoPoses = collectPicoPoses();
             if (picoPoses.length > 0) {
                 children.push(H("5.2 PICO posés", 2));
-                const rows = [
-                    new TableRow({
-                        tableHeader: true,
-                        children: [
-                            cellText("N°", { width: 800, shading: COLOR_SUBTITLE, color: COLOR_WHITE, bold: true, align: AlignmentType.CENTER }),
-                            cellText("Zone / Pièce", { width: 3280, shading: COLOR_SUBTITLE, color: COLOR_WHITE, bold: true }),
-                            cellText("Note", { width: 5280, shading: COLOR_SUBTITLE, color: COLOR_WHITE, bold: true })
-                        ]
-                    })
-                ];
-                picoPoses.forEach(p => rows.push(new TableRow({
-                    children: [
-                        cellText(`PICO ${p.num}`, { width: 800, bold: true, align: AlignmentType.CENTER }),
-                        cellText(p.zone || "—", { width: 3280 }),
-                        cellText(p.note || "", { width: 5280 })
-                    ]
-                })));
-                children.push(new Table({
-                    width: { size: 9360, type: WidthType.DXA },
-                    alignment: AlignmentType.CENTER,
-                    columnWidths: [800, 3280, 5280],
-                    rows
-                }));
+                const rows = [ new TableRow({ tableHeader: true, children: [ cellText("N°", { width: 800, shading: COLOR_SUBTITLE, color: COLOR_WHITE, bold: true, align: AlignmentType.CENTER }), cellText("Zone / Pièce", { width: 3280, shading: COLOR_SUBTITLE, color: COLOR_WHITE, bold: true }), cellText("Note", { width: 5280, shading: COLOR_SUBTITLE, color: COLOR_WHITE, bold: true }) ] }) ];
+                picoPoses.forEach(p => rows.push(new TableRow({ children: [ cellText(`PICO ${p.num}`, { width: 800, bold: true, align: AlignmentType.CENTER }), cellText(p.zone || "—", { width: 3280 }), cellText(p.note || "", { width: 5280 }) ] })));
+                children.push(new Table({ width: { size: 9360, type: WidthType.DXA }, alignment: AlignmentType.CENTER, columnWidths: [800, 3280, 5280], rows }));
             }
-
-            // Métré + hauteur
             const metrage = val("pico_metrage");
             const hauteur = val("pico_hauteur");
             if (metrage || hauteur) {
@@ -1620,15 +1224,8 @@ async function generateReport() {
                 const metRows = [];
                 if (metrage) metRows.push(new TableRow({ children: [cellText("Linéaire câble Ethernet total", { width: 4680, shading: COLOR_TABLE_LABEL, bold: true }), cellText(metrage + " ml", { width: 4680 })] }));
                 if (hauteur) metRows.push(new TableRow({ children: [cellText("Hauteur de pose des PICO", { width: 4680, shading: COLOR_TABLE_LABEL, bold: true }), cellText(hauteur + " m", { width: 4680 })] }));
-                children.push(new Table({
-                    width: { size: 9360, type: WidthType.DXA },
-                    alignment: AlignmentType.CENTER,
-                    columnWidths: [4680, 4680],
-                    rows: metRows
-                }));
+                children.push(new Table({ width: { size: 9360, type: WidthType.DXA }, alignment: AlignmentType.CENTER, columnWidths: [4680, 4680], rows: metRows }));
             }
-
-            // Photos PICO
             const picoPhotoKeys = Object.keys(photoStore).filter(k => k.startsWith("pico_photo_"));
             if (picoPhotoKeys.length > 0) {
                 children.push(H("5.4 Reporting photos / cheminement câbles", 2));
@@ -1638,41 +1235,19 @@ async function generateReport() {
                     const label = labelInput ? labelInput.value : key;
                     const img = await getPhotoImageRun(key, 480, 320);
                     if (img) {
-                        children.push(new Paragraph({
-                            spacing: { before: 200, after: 60 },
-                            children: [new TextRun({
-                                text: "📷 " + label, bold: true, size: 22, color: COLOR_SUBTITLE, font: FONT
-                            })]
-                        }));
-                        children.push(new Paragraph({
-                            alignment: AlignmentType.CENTER,
-                            children: [img]
-                        }));
+                        children.push(new Paragraph({ spacing: { before: 200, after: 60 }, children: [new TextRun({ text: "📷 " + label, bold: true, size: 22, color: COLOR_SUBTITLE, font: FONT })] }));
+                        children.push(new Paragraph({ alignment: AlignmentType.CENTER, children: [img] }));
                     }
                 }
             }
         }
-
-        // ===== 6. SECTION QUATRA =====
         if (quatraActive) {
             children.push(H("6. Mise en place de la solution CEL-FI QUATRA", 1));
-
             const quatraForfait = getSelectedForfait("Quatra");
             if (quatraForfait) {
                 children.push(H("6.1 Forfait retenu", 2));
-                children.push(new Table({
-                    width: { size: 9360, type: WidthType.DXA },
-                    alignment: AlignmentType.CENTER,
-                    columnWidths: [2080, 7280],
-                    rows: [
-                        new TableRow({ children: [cellText("Référence", { width: 2080, shading: COLOR_TABLE_LABEL, bold: true }), cellText(quatraForfait.ref, { width: 7280 })] }),
-                        new TableRow({ children: [cellText("Forfait", { width: 2080, shading: COLOR_TABLE_LABEL, bold: true }), cellText(quatraForfait.label, { width: 7280, bold: true })] }),
-                        new TableRow({ children: [cellText("Description", { width: 2080, shading: COLOR_TABLE_LABEL, bold: true }), cellText(quatraForfait.description, { width: 7280 })] }),
-                        new TableRow({ children: [cellText("Critères", { width: 2080, shading: COLOR_TABLE_LABEL, bold: true }), cellText(quatraForfait.critere, { width: 7280 })] })
-                    ]
-                }));
+                children.push(new Table({ width: { size: 9360, type: WidthType.DXA }, alignment: AlignmentType.CENTER, columnWidths: [2080, 7280], rows: [ new TableRow({ children: [cellText("Référence", { width: 2080, shading: COLOR_TABLE_LABEL, bold: true }), cellText(quatraForfait.ref, { width: 7280 })] }), new TableRow({ children: [cellText("Forfait", { width: 2080, shading: COLOR_TABLE_LABEL, bold: true }), cellText(quatraForfait.label, { width: 7280, bold: true })] }), new TableRow({ children: [cellText("Description", { width: 2080, shading: COLOR_TABLE_LABEL, bold: true }), cellText(quatraForfait.description, { width: 7280 })] }), new TableRow({ children: [cellText("Critères", { width: 2080, shading: COLOR_TABLE_LABEL, bold: true }), cellText(quatraForfait.critere, { width: 7280 })] }) ] }));
             }
-
             const qNu = val("quatra_nb_nu");
             const qCu = val("quatra_nb_cu");
             const qMet = val("quatra_metrage_cu");
@@ -1682,15 +1257,8 @@ async function generateReport() {
                 if (qNu) qRows.push(new TableRow({ children: [cellText("Nombre de NU", { width: 4680, shading: COLOR_TABLE_LABEL, bold: true }), cellText(qNu, { width: 4680 })] }));
                 if (qCu) qRows.push(new TableRow({ children: [cellText("Nombre de CU", { width: 4680, shading: COLOR_TABLE_LABEL, bold: true }), cellText(qCu, { width: 4680 })] }));
                 if (qMet) qRows.push(new TableRow({ children: [cellText("Linéaire câble RJ45 par CU", { width: 4680, shading: COLOR_TABLE_LABEL, bold: true }), cellText(qMet + " m", { width: 4680 })] }));
-                children.push(new Table({
-                    width: { size: 9360, type: WidthType.DXA },
-                    alignment: AlignmentType.CENTER,
-                    columnWidths: [4680, 4680],
-                    rows: qRows
-                }));
+                children.push(new Table({ width: { size: 9360, type: WidthType.DXA }, alignment: AlignmentType.CENTER, columnWidths: [4680, 4680], rows: qRows }));
             }
-
-            // Photos Quatra
             const quatraPhotoKeys = Object.keys(photoStore).filter(k => k.startsWith("quatra_photo_"));
             if (quatraPhotoKeys.length > 0) {
                 children.push(H("6.3 Photos Quatra", 2));
@@ -1700,224 +1268,57 @@ async function generateReport() {
                     const label = labelInput ? labelInput.value : key;
                     const img = await getPhotoImageRun(key, 480, 320);
                     if (img) {
-                        children.push(new Paragraph({
-                            spacing: { before: 200, after: 60 },
-                            children: [new TextRun({
-                                text: "📷 " + label, bold: true, size: 22, color: COLOR_SUBTITLE, font: FONT
-                            })]
-                        }));
-                        children.push(new Paragraph({
-                            alignment: AlignmentType.CENTER,
-                            children: [img]
-                        }));
+                        children.push(new Paragraph({ spacing: { before: 200, after: 60 }, children: [new TextRun({ text: "📷 " + label, bold: true, size: 22, color: COLOR_SUBTITLE, font: FONT })] }));
+                        children.push(new Paragraph({ alignment: AlignmentType.CENTER, children: [img] }));
                     }
                 }
             }
         }
-
-        // ===== 7. FOURNITURES =====
         const fournitures = collectFournitures();
         const fLibre = val("fournitures_libre");
         const oLibre = val("outils_libre");
         if (fournitures.length > 0 || fLibre.trim() || oLibre.trim()) {
             children.push(H("7. Fournitures & matériel", 1));
-
             if (fournitures.length > 0) {
-                // Grouper par catégorie
                 const byCat = {};
-                fournitures.forEach(f => {
-                    if (!byCat[f.cat]) byCat[f.cat] = [];
-                    byCat[f.cat].push(f);
-                });
-
-                const fRows = [
-                    new TableRow({
-                        tableHeader: true,
-                        children: [
-                            cellText("Désignation", { width: 6480, shading: COLOR_SUBTITLE, color: COLOR_WHITE, bold: true }),
-                            cellText("Quantité", { width: 1440, shading: COLOR_SUBTITLE, color: COLOR_WHITE, bold: true, align: AlignmentType.CENTER }),
-                            cellText("Unité", { width: 1440, shading: COLOR_SUBTITLE, color: COLOR_WHITE, bold: true, align: AlignmentType.CENTER })
-                        ]
-                    })
-                ];
+                fournitures.forEach(f => { if (!byCat[f.cat]) byCat[f.cat] = []; byCat[f.cat].push(f); });
+                const fRows = [ new TableRow({ tableHeader: true, children: [ cellText("Désignation", { width: 6480, shading: COLOR_SUBTITLE, color: COLOR_WHITE, bold: true }), cellText("Quantité", { width: 1440, shading: COLOR_SUBTITLE, color: COLOR_WHITE, bold: true, align: AlignmentType.CENTER }), cellText("Unité", { width: 1440, shading: COLOR_SUBTITLE, color: COLOR_WHITE, bold: true, align: AlignmentType.CENTER }) ] }) ];
                 Object.keys(byCat).forEach(cat => {
-                    fRows.push(new TableRow({
-                        children: [new TableCell({
-                            width: { size: 9360, type: WidthType.DXA },
-                            columnSpan: 3,
-                            shading: { fill: COLOR_TABLE_LABEL, type: ShadingType.CLEAR, color: "auto" },
-                            margins: { top: 60, bottom: 60, left: 100, right: 100 },
-                            borders: stdBorders,
-                            children: [new Paragraph({
-                                children: [new TextRun({ text: cat, bold: true, italics: true, color: COLOR_TITLE, size: 20, font: FONT })]
-                            })]
-                        })]
-                    }));
-                    byCat[cat].forEach(f => fRows.push(new TableRow({
-                        children: [
-                            cellText("• " + f.label, { width: 6480 }),
-                            cellText(String(f.qty), { width: 1440, align: AlignmentType.CENTER, bold: true }),
-                            cellText(f.unit, { width: 1440, align: AlignmentType.CENTER })
-                        ]
-                    })));
+                    fRows.push(new TableRow({ children: [new TableCell({ width: { size: 9360, type: WidthType.DXA }, columnSpan: 3, shading: { fill: COLOR_TABLE_LABEL, type: ShadingType.CLEAR, color: "auto" }, margins: { top: 60, bottom: 60, left: 100, right: 100 }, borders: stdBorders, children: [new Paragraph({ children: [new TextRun({ text: cat, bold: true, italics: true, color: COLOR_TITLE, size: 20, font: FONT })] })] })] }));
+                    byCat[cat].forEach(f => fRows.push(new TableRow({ children: [ cellText("• " + f.label, { width: 6480 }), cellText(String(f.qty), { width: 1440, align: AlignmentType.CENTER, bold: true }), cellText(f.unit, { width: 1440, align: AlignmentType.CENTER }) ] })));
                 });
-                children.push(new Table({
-                    width: { size: 9360, type: WidthType.DXA },
-                    alignment: AlignmentType.CENTER,
-                    columnWidths: [6480, 1440, 1440],
-                    rows: fRows
-                }));
+                children.push(new Table({ width: { size: 9360, type: WidthType.DXA }, alignment: AlignmentType.CENTER, columnWidths: [6480, 1440, 1440], rows: fRows }));
             }
-
-            if (fLibre.trim()) {
-                children.push(H("Autres fournitures", 2));
-                fLibre.split(/\n+/).forEach(line => {
-                    if (line.trim()) children.push(P("• " + line.trim()));
-                });
-            }
-            if (oLibre.trim()) {
-                children.push(H("Outils nécessaires", 2));
-                oLibre.split(/\n+/).forEach(line => {
-                    if (line.trim()) children.push(P("• " + line.trim()));
-                });
-            }
+            if (fLibre.trim()) { children.push(H("Autres fournitures", 2)); fLibre.split(/\n+/).forEach(line => { if (line.trim()) children.push(P("• " + line.trim())); }); }
+            if (oLibre.trim()) { children.push(H("Outils nécessaires", 2)); oLibre.split(/\n+/).forEach(line => { if (line.trim()) children.push(P("• " + line.trim())); }); }
         }
-
-        // ===== 8. MISE EN ŒUVRE =====
         children.push(H("8. Mise en œuvre", 1));
-        const mevRows = [
-            ["Hauteur de travail max", val("hauteur_max") ? val("hauteur_max") + " m" : ""],
-            ["Nombre d'intervenants", val("nb_techniciens")],
-            ["Temps de travaux estimé", val("duree_totale")],
-            ["Nacelle à prévoir", radioVal("nacelle_prevoir")],
-            ["Échelle / échafaudage", radioVal("echelle_prevoir")]
-        ].filter(r => r[1] && r[1].trim());
-
-        if (mevRows.length > 0) {
-            children.push(new Table({
-                width: { size: 9360, type: WidthType.DXA },
-                alignment: AlignmentType.CENTER,
-                columnWidths: [4680, 4680],
-                rows: mevRows.map(([k, v]) => new TableRow({
-                    children: [
-                        cellText(k, { width: 4680, shading: COLOR_TABLE_LABEL, bold: true }),
-                        cellText(v, { width: 4680 })
-                    ]
-                }))
-            }));
-        }
-
-        // ===== 9. ACCÈS & VALIDATION =====
-        children.push(H("9. Accès site & validation", 1));
+        const dureeLabel = isTravaux ? "Durée des travaux réalisés" : "Temps de travaux estimé";
+        const nacelleLabel = isTravaux ? "Nacelle utilisée ?" : "Nacelle à prévoir ?";
+        const mevRows = [ ["Hauteur de travail max", val("hauteur_max") ? val("hauteur_max") + " m" : ""], ["Nombre d'intervenants", val("nb_techniciens")], [dureeLabel, val("duree_totale")], [nacelleLabel, radioVal("nacelle_prevoir")], ["Échelle / échafaudage", radioVal("echelle_prevoir")] ].filter(r => r[1] && r[1].trim());
+        if (mevRows.length > 0) children.push(new Table({ width: { size: 9360, type: WidthType.DXA }, alignment: AlignmentType.CENTER, columnWidths: [4680, 4680], rows: mevRows.map(([k, v]) => new TableRow({ children: [ cellText(k, { width: 4680, shading: COLOR_TABLE_LABEL, bold: true }), cellText(v, { width: 4680 }) ] })) }));
+        children.push(H(isTravaux ? "Synthèse d'intervention" : "9. Accès site & validation", 1));
         const acces = val("acces_site");
         const valide = val("solution_validee_par");
         const obs = val("observations");
-
-        if (acces.trim()) {
-            children.push(P([new TextRun({ text: "Conditions d'accès : ", bold: true, font: FONT, size: 22 }),
-                             new TextRun({ text: acces, font: FONT, size: 22 })]));
-        }
-        if (valide.trim()) {
-            children.push(P([new TextRun({ text: "Solution validée par : ", bold: true, font: FONT, size: 22 }),
-                             new TextRun({ text: valide, font: FONT, size: 22 })]));
-        }
-        if (obs.trim()) {
-            children.push(H("Observations / Commentaires complémentaires", 2));
-            obs.split(/\n+/).forEach(line => {
-                if (line.trim()) children.push(P(line.trim()));
-            });
-        }
-
-        // Signature
+        if (!isTravaux && acces.trim()) children.push(P([new TextRun({ text: "Conditions d'accès : ", bold: true, font: FONT, size: 22 }), new TextRun({ text: acces, font: FONT, size: 22 })]));
+        if (valide.trim()) children.push(P([new TextRun({ text: "Solution validée par : ", bold: true, font: FONT, size: 22 }), new TextRun({ text: valide, font: FONT, size: 22 })]));
+        if (obs.trim()) { children.push(H("Observations / Commentaires complémentaires", 2)); obs.split(/\n+/).forEach(line => { if (line.trim()) children.push(P(line.trim())); }); }
         const signNom = val("signataire_nom");
         const signDate = val("signataire_date");
-        if (signNom || signDate) {
-            children.push(P(""));
-            children.push(P(""));
-            children.push(P([new TextRun({ text: "Signataire : ", bold: true, font: FONT, size: 22 }),
-                             new TextRun({ text: signNom + (signDate ? "  —  " + signDate : ""), font: FONT, size: 22 })]));
-        }
-
-        // ============ DOCUMENT ============
+        if (signNom || signDate) { children.push(P("")); children.push(P("")); children.push(P([new TextRun({ text: "Signataire : ", bold: true, font: FONT, size: 22 }), new TextRun({ text: signNom + (signDate ? "  —  " + signDate : ""), font: FONT, size: 22 })])); }
         const doc = new Document({
             creator: "IPKONEKT",
             title: titreRapport,
             description: titreRapport,
-            styles: {
-                default: { document: { run: { font: FONT, size: 20 } } }
-            },
+            styles: { default: { document: { run: { font: FONT, size: 20 } } } },
             sections: [{
-                properties: {
-                    page: {
-                        size: { width: 11906, height: 16838 }, // A4 (cohérent avec Starlink)
-                        margin: { top: 1440, right: 1080, bottom: 1080, left: 1080, header: 360, footer: 360 }
-                    }
-                },
-                headers: {
-                    default: new Header({
-                        children: [new Table({
-                            width: { size: 9360, type: WidthType.DXA },
-                            columnWidths: [4680, 4680],
-                            borders: {
-                                top: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
-                                bottom: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
-                                left: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
-                                right: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
-                                insideHorizontal: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
-                                insideVertical: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" }
-                            },
-                            rows: [new TableRow({
-                                children: [
-                                    new TableCell({
-                                        borders: noBorders,
-                                        width: { size: 4680, type: WidthType.DXA },
-                                        margins: { top: 0, bottom: 0, left: 0, right: 0 },
-                                        verticalAlign: VerticalAlign.CENTER,
-                                        children: [new Paragraph({
-                                            alignment: AlignmentType.LEFT,
-                                            spacing: { before: 0, after: 0 },
-                                            children: (typeof LOGO_IPKONEKT_B64 !== "undefined") ? [new ImageRun({
-                                                data: b64(LOGO_IPKONEKT_B64),
-                                                transformation: { width: 56, height: 50 },
-                                                type: "png"
-                                            })] : []
-                                        })]
-                                    }),
-                                    new TableCell({
-                                        borders: noBorders,
-                                        width: { size: 4680, type: WidthType.DXA },
-                                        margins: { top: 0, bottom: 0, left: 0, right: 0 },
-                                        verticalAlign: VerticalAlign.CENTER,
-                                        children: [new Paragraph({
-                                            alignment: AlignmentType.RIGHT,
-                                            spacing: { before: 0, after: 0 },
-                                            children: (typeof LOGO_BOUYGUES_B64 !== "undefined") ? [new ImageRun({
-                                                data: b64(LOGO_BOUYGUES_B64),
-                                                transformation: { width: 56, height: 56 },
-                                                type: "png"
-                                            })] : []
-                                        })]
-                                    })
-                                ]
-                            })]
-                        })]
-                    })
-                },
-                footers: {
-                    default: new Footer({
-                        children: [new Paragraph({
-                            alignment: AlignmentType.LEFT,
-                            children: [new TextRun({
-                                text: "Document confidentiel — Usage interne IPKONEKT / Bouygues Telecom",
-                                italics: true, size: 16, color: "808080", font: FONT
-                            })]
-                        })]
-                    })
-                },
+                properties: { page: { size: { width: 11906, height: 16838 }, margin: { top: 1440, right: 1080, bottom: 1080, left: 1080, header: 360, footer: 360 } } },
+                headers: { default: new Header({ children: [new Table({ width: { size: 9360, type: WidthType.DXA }, columnWidths: [4680, 4680], borders: { top: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" }, bottom: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" }, left: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" }, right: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" }, insideHorizontal: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" }, insideVertical: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" } }, rows: [new TableRow({ children: [ new TableCell({ borders: noBorders, width: { size: 4680, type: WidthType.DXA }, margins: { top: 0, bottom: 0, left: 0, right: 0 }, verticalAlign: VerticalAlign.CENTER, children: [new Paragraph({ alignment: AlignmentType.LEFT, spacing: { before: 0, after: 0 }, children: (typeof LOGO_IPKONEKT_B64 !== "undefined") ? [new ImageRun({ data: b64(LOGO_IPKONEKT_B64), transformation: { width: 56, height: 50 }, type: "png" })] : [] })] }), new TableCell({ borders: noBorders, width: { size: 4680, type: WidthType.DXA }, margins: { top: 0, bottom: 0, left: 0, right: 0 }, verticalAlign: VerticalAlign.CENTER, children: [new Paragraph({ alignment: AlignmentType.RIGHT, spacing: { before: 0, after: 0 }, children: (typeof LOGO_BOUYGUES_B64 !== "undefined") ? [new ImageRun({ data: b64(LOGO_BOUYGUES_B64), transformation: { width: 56, height: 56 }, type: "png" })] : [] })] }) ] })] })] }) },
+                footers: { default: new Footer({ children: [new Paragraph({ alignment: AlignmentType.LEFT, children: [new TextRun({ text: "Document confidentiel — Usage interne IPKONEKT / Bouygues Telecom", italics: true, size: 16, color: "808080", font: FONT })] })] }) },
                 children: children
             }]
         });
-
         const blob = await Packer.toBlob(doc);
         const filename = buildBaseFilename() + ".docx";
         saveAs(blob, filename);
@@ -1929,11 +1330,9 @@ async function generateReport() {
 }
 window.generateReport = generateReport;
 
-// ----- Rendre le plan d'évacuation avec ses points dessinés (canvas → dataUrl) -----
 async function renderPlanWithPoints() {
     const planPhoto = photoStore["plan_evac"];
     if (!planPhoto || !planPhoto.dataUrl) return null;
-
     return new Promise((resolve) => {
         const img = new Image();
         img.onload = () => {
@@ -1942,28 +1341,20 @@ async function renderPlanWithPoints() {
             canvas.height = img.naturalHeight;
             const ctx = canvas.getContext("2d");
             ctx.drawImage(img, 0, 0);
-
-            // Mêmes paramètres que 4G/5G
             const wrap = document.getElementById('planEvacContainer');
             const wrapRect = wrap ? wrap.getBoundingClientRect() : { width: img.naturalWidth, height: img.naturalHeight };
             const scaleX = img.naturalWidth  / Math.max(1, wrapRect.width);
             const scaleY = img.naturalHeight / Math.max(1, wrapRect.height);
             const scale = Math.max(scaleX, scaleY);
-
             evacPoints.forEach((point) => {
                 const colorHex = getMeasureColor(point.measureId);
                 const hex = colorHex.replace("#", "");
                 const r = parseInt(hex.substring(0,2), 16);
                 const g = parseInt(hex.substring(2,4), 16);
                 const b = parseInt(hex.substring(4,6), 16);
-
-                // Position en px image
                 const cx = (point.xPct / 100) * img.naturalWidth;
                 const cy = (point.yPct / 100) * img.naturalHeight;
-                // Taille du halo en px image (point.size = diamètre en px écran)
                 const haloR = (point.size / 2) * scale;
-
-                // Halo (gradient radial)
                 const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, haloR);
                 grad.addColorStop(0,    `rgba(${r},${g},${b},0.55)`);
                 grad.addColorStop(0.4,  `rgba(${r},${g},${b},0.25)`);
@@ -1972,8 +1363,6 @@ async function renderPlanWithPoints() {
                 ctx.beginPath();
                 ctx.arc(cx, cy, haloR, 0, Math.PI * 2);
                 ctx.fill();
-
-                // Dot blanc + dot couleur au centre
                 const coreR = Math.max(6, 7 * scale);
                 ctx.fillStyle = "white";
                 ctx.beginPath();
@@ -1983,8 +1372,6 @@ async function renderPlanWithPoints() {
                 ctx.beginPath();
                 ctx.arc(cx, cy, coreR, 0, Math.PI * 2);
                 ctx.fill();
-
-                // Label dans rectangle arrondi blanc + bordure bleue
                 const labelTxt = point.label || "•";
                 const fontSize = Math.max(14, 14 * scale);
                 ctx.font = `bold ${fontSize}px Arial, sans-serif`;
@@ -1992,19 +1379,16 @@ async function renderPlanWithPoints() {
                 const padX = 8, padY = 4;
                 const labelW = metrics.width + padX * 2;
                 const labelH = fontSize + padY * 2;
-                // Position au-dessus à droite du dot (distance fixe du dot, pas du halo)
                 const offsetX = coreR + 6;
                 const offsetY = -(coreR + labelH + 6);
                 const labelX = cx + offsetX;
                 const labelY = cy + offsetY;
-
                 ctx.fillStyle = "white";
                 ctx.strokeStyle = "#1F4E79";
                 ctx.lineWidth = 1.5;
                 roundRectFill(ctx, labelX, labelY, labelW, labelH, 4);
                 ctx.fill();
                 ctx.stroke();
-
                 ctx.fillStyle = "#1F4E79";
                 ctx.textAlign = "center";
                 ctx.textBaseline = "middle";
@@ -2017,7 +1401,6 @@ async function renderPlanWithPoints() {
     });
 }
 
-// Helper : rectangle arrondi qui prépare le path (à fill+stroke ensuite)
 function roundRectFill(ctx, x, y, w, h, r) {
     ctx.beginPath();
     ctx.moveTo(x + r, y);
@@ -2028,12 +1411,32 @@ function roundRectFill(ctx, x, y, w, h, r) {
     ctx.closePath();
 }
 
-function roundRect(ctx, x, y, w, h, r) {
-    ctx.beginPath();
-    ctx.moveTo(x + r, y);
-    ctx.arcTo(x + w, y, x + w, y + h, r);
-    ctx.arcTo(x + w, y + h, x, y + h, r);
-    ctx.arcTo(x, y + h, x, y, r);
-    ctx.arcTo(x, y, x + w, y, r);
-    ctx.closePath();
+// =============================================================
+//  RESET
+// =============================================================
+function resetForm() {
+    if (!confirm("Réinitialiser le formulaire ? Toutes les données saisies seront perdues.")) return;
+    document.querySelectorAll("input, textarea, select").forEach(el => {
+        if (el.id === "modeIntervention") return;
+        if (el.type === "checkbox" || el.type === "radio") el.checked = false;
+        else if (el.type !== "file") el.value = "";
+    });
+    setMode("audit");
+    Object.keys(photoStore).forEach(k => delete photoStore[k]);
+    document.querySelectorAll(".photo-preview").forEach(p => { p.src = ""; p.classList.remove("shown"); });
+    document.querySelectorAll(".annotate-btn").forEach(b => b.disabled = true);
+    document.querySelectorAll(".forfait-card").forEach(c => c.classList.remove("selected"));
+    document.getElementById("measuresBody").innerHTML = "";
+    document.getElementById("picoPosesList").innerHTML = "";
+    document.getElementById("picoPhotoGrid").innerHTML = "";
+    document.getElementById("quatraPhotoGrid").innerHTML = "";
+    measureCounter = picoPoseCounter = picoPhotoCounter = quatraPhotoCounter = 0;
+    addMeasureRow();
+    addPicoPose();
+    setupPicoPhotoBlocks();
+    setupQuatraPhotoBlocks();
+    clearPlan();
+    updateSectionState();
+    showStatus("Formulaire réinitialisé.", "success");
 }
+window.resetForm = resetForm;
