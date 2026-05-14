@@ -14,15 +14,45 @@ function getMode() {
   const el = document.getElementById("modeIntervention");
   return (el && el.value === "travaux") ? "travaux" : "audit";
 }
+
+// ---- Calcul automatique de la durée d'intervention (mode TRAVAUX) ----
+// Calcule la différence entre heure_debut et heure_fin et affiche
+// le résultat dans #duree_intervention sous la forme "Xh YYmin" (ou "YYmin" si < 1h).
+// Gère le cas où l'heure de fin est le jour suivant (ex: 22:00 → 02:00 = 4h).
+function updateDureeIntervention() {
+  const out = document.getElementById("duree_intervention");
+  if (!out) return;
+  const hd = (document.getElementById("heure_debut") || {}).value || "";
+  const hf = (document.getElementById("heure_fin")   || {}).value || "";
+  if (!hd || !hf) { out.value = ""; return; }
+  const [h1, m1] = hd.split(":").map(Number);
+  const [h2, m2] = hf.split(":").map(Number);
+  if ([h1, m1, h2, m2].some(v => isNaN(v))) { out.value = ""; return; }
+  let diff = (h2 * 60 + m2) - (h1 * 60 + m1);
+  if (diff < 0) diff += 24 * 60; // passage minuit
+  if (diff === 0) { out.value = "0min"; return; }
+  const hh = Math.floor(diff / 60);
+  const mm = diff % 60;
+  const mmStr = String(mm).padStart(2, "0");
+  out.value = hh > 0 ? (mm > 0 ? `${hh}h ${mmStr}min` : `${hh}h`)
+                     : `${mm}min`;
+}
 function setMode(mode) {
+  const m = (mode === "travaux") ? "travaux" : "audit";
   const hidden = document.getElementById("modeIntervention");
-  if (hidden) hidden.value = (mode === "travaux") ? "travaux" : "audit";
+  if (hidden) hidden.value = m;
   const ba = document.getElementById("modeAuditBtn");
   const bt = document.getElementById("modeTravauxBtn");
   if (ba && bt) {
-    ba.classList.toggle("active", mode === "audit");
-    bt.classList.toggle("active", mode === "travaux");
+    ba.classList.toggle("active", m === "audit");
+    bt.classList.toggle("active", m === "travaux");
   }
+  // Pilotage de la visibilité conditionnelle via CSS (body[data-mode="..."])
+  if (typeof document !== "undefined" && document.body) {
+    document.body.setAttribute("data-mode", m);
+  }
+  // Recalculer la durée en mode travaux (au cas où des heures sont déjà saisies)
+  if (m === "travaux") updateDureeIntervention();
 }
 // Exposer setMode globalement (appelé via onclick)
 if (typeof window !== "undefined") {
@@ -81,6 +111,18 @@ document.addEventListener("DOMContentLoaded", () => {
     `;
     epiList.appendChild(row);
   });
+
+  // Initialiser l'attribut data-mode du <body> selon le mode courant
+  // (utile pour le CSS conditionnel mode-audit-only / mode-travaux-only)
+  const initMode = document.getElementById("modeIntervention");
+  document.body.setAttribute("data-mode",
+    (initMode && initMode.value === "travaux") ? "travaux" : "audit");
+
+  // Calcul automatique de la durée d'intervention (mode TRAVAUX)
+  const hDebut = document.getElementById("heure_debut");
+  const hFin   = document.getElementById("heure_fin");
+  if (hDebut) hDebut.addEventListener("input", updateDureeIntervention);
+  if (hFin)   hFin.addEventListener("input",   updateDureeIntervention);
 
   // Photo upload listeners (délégation pour gérer les blocs ajoutés dynamiquement)
   document.body.addEventListener("change", (e) => {
@@ -938,56 +980,91 @@ async function generateDocument() {
     });
 
     // ========== SECTION 6 Synthèse ==========
-    const tableSynthese = new Table({
-      width: { size: 9360, type: WidthType.DXA },
-      columnWidths: [3120, 6240],
-      rows: [
+    const isTravaux = (getMode() === "travaux");
+
+    // Libellés et valeurs qui changent selon le mode
+    const labelDuree   = isTravaux ? "Durée de l'intervention"  : "Durée totale à prévoir";
+    const valueDuree   = isTravaux ? val("duree_intervention")  : val("duree_totale");
+    const labelNacelle = isTravaux ? "Nacelle utilisée"         : "Nacelle à prévoir";
+    const nacelleRadio = isTravaux ? radioValue("nacelle_utilisee") : radioValue("nacelle_prevoir");
+    const echelleRadio = radioValue("echelle_echafaud");
+
+    const syntheseRows = [
+      new TableRow({ children: [
+        cell("Heure de début d'intervention", { width: 3120, textOpts: { bold: true } }),
+        cell(val("heure_debut"), { width: 6240 })
+      ]}),
+      new TableRow({ children: [
+        cell("Heure de fin d'intervention", { width: 3120, textOpts: { bold: true } }),
+        cell(val("heure_fin"), { width: 6240 })
+      ]}),
+      new TableRow({ children: [
+        cell(labelDuree, { width: 3120, textOpts: { bold: true } }),
+        cell(valueDuree, { width: 6240 })
+      ]}),
+      new TableRow({ children: [
+        cell("Nombre de techniciens", { width: 3120, textOpts: { bold: true } }),
+        cell(val("nb_techniciens"), { width: 6240 })
+      ]}),
+      new TableRow({ children: [
+        cell(labelNacelle, { width: 3120, textOpts: { bold: true } }),
+        new TableCell({
+          borders, width: { size: 6240, type: WidthType.DXA },
+          margins: { top: 80, bottom: 80, left: 120, right: 120 },
+          children: [ checkboxParagraph([
+            { label: "Oui", checked: nacelleRadio === "Oui" },
+            { label: "Non", checked: nacelleRadio === "Non" }
+          ]) ]
+        })
+      ]})
+    ];
+
+    // Ligne supplémentaire « Échelle / Échafaud utilisé » : mode TRAVAUX uniquement
+    if (isTravaux) {
+      syntheseRows.push(
         new TableRow({ children: [
-          cell("Heure de début d'intervention", { width: 3120, textOpts: { bold: true } }),
-          cell(val("heure_debut"), { width: 6240 })
-        ]}),
-        new TableRow({ children: [
-          cell("Heure de fin d'intervention", { width: 3120, textOpts: { bold: true } }),
-          cell(val("heure_fin"), { width: 6240 })
-        ]}),
-        new TableRow({ children: [
-          cell("Durée totale à prévoir", { width: 3120, textOpts: { bold: true } }),
-          cell(val("duree_totale"), { width: 6240 })
-        ]}),
-        new TableRow({ children: [
-          cell("Nombre de techniciens", { width: 3120, textOpts: { bold: true } }),
-          cell(val("nb_techniciens"), { width: 6240 })
-        ]}),
-        new TableRow({ children: [
-          cell("Nacelle à prévoir", { width: 3120, textOpts: { bold: true } }),
+          cell("Échelle / Échafaud utilisé", { width: 3120, textOpts: { bold: true } }),
           new TableCell({
             borders, width: { size: 6240, type: WidthType.DXA },
             margins: { top: 80, bottom: 80, left: 120, right: 120 },
             children: [ checkboxParagraph([
-              { label: "Oui", checked: radioValue("nacelle_prevoir") === "Oui" },
-              { label: "Non", checked: radioValue("nacelle_prevoir") === "Non" }
-            ]) ]
-          })
-        ]}),
-        new TableRow({ children: [
-          cell("Câblage supplémentaire", { width: 3120, textOpts: { bold: true } }),
-          new TableCell({
-            borders, width: { size: 6240, type: WidthType.DXA },
-            margins: { top: 80, bottom: 80, left: 120, right: 120 },
-            children: [ checkboxParagraph([
-              { label: "Oui", checked: radioValue("cablage_supp") === "Oui" },
-              { label: "Non", checked: radioValue("cablage_supp") === "Non" }
+              { label: "Oui", checked: echelleRadio === "Oui" },
+              { label: "Non", checked: echelleRadio === "Non" }
             ]) ]
           })
         ]})
-      ]
+      );
+    }
+
+    syntheseRows.push(
+      new TableRow({ children: [
+        cell("Câblage supplémentaire", { width: 3120, textOpts: { bold: true } }),
+        new TableCell({
+          borders, width: { size: 6240, type: WidthType.DXA },
+          margins: { top: 80, bottom: 80, left: 120, right: 120 },
+          children: [ checkboxParagraph([
+            { label: "Oui", checked: radioValue("cablage_supp") === "Oui" },
+            { label: "Non", checked: radioValue("cablage_supp") === "Non" }
+          ]) ]
+        })
+      ]})
+    );
+
+    const tableSynthese = new Table({
+      width: { size: 9360, type: WidthType.DXA },
+      columnWidths: [3120, 6240],
+      rows: syntheseRows
     });
+
+    const labelObservations = isTravaux
+      ? "Commentaire sur l'intervention"
+      : "Observations / Réserves / Points à lever";
     const tableObservations = new Table({
       width: { size: 9360, type: WidthType.DXA },
       columnWidths: [9360],
       rows: [
         new TableRow({ children: [
-          cell("Observations / Réserves / Points à lever", { width: 9360, shading: COLOR_TABLE_HEADER, textOpts: { bold: true } })
+          cell(labelObservations, { width: 9360, shading: COLOR_TABLE_HEADER, textOpts: { bold: true } })
         ]}),
         new TableRow({ children: [
           new TableCell({
@@ -1207,14 +1284,18 @@ async function generateDocument() {
     children.push(emptyP());
     children.push(rappelBox);
 
-    // SECTION 5 EPI
-    children.push(sectionHeading("5", "EPI requis - Équipements de Protection Individuelle"));
-    children.push(tableEPI);
-    children.push(emptyP());
-    children.push(tableEPIRemarques);
+    // SECTION 5 EPI — mode AUDIT uniquement
+    // (en mode TRAVAUX, la section EPI est entièrement supprimée du rapport)
+    if (!isTravaux) {
+      children.push(sectionHeading("5", "EPI requis - Équipements de Protection Individuelle"));
+      children.push(tableEPI);
+      children.push(emptyP());
+      children.push(tableEPIRemarques);
+    }
 
-    // SECTION 6 Synthèse
-    children.push(sectionHeading("6", "Synthèse de l'intervention"));
+    // Synthèse : numéro 6 en mode AUDIT, numéro 5 en mode TRAVAUX (EPI supprimée)
+    const syntheseNum = isTravaux ? "5" : "6";
+    children.push(sectionHeading(syntheseNum, "Synthèse de l'intervention"));
     children.push(tableSynthese);
     children.push(emptyP());
     children.push(tableObservations);
@@ -1312,6 +1393,7 @@ async function exportToJSON() {
       heure_debut: val("heure_debut"),
       heure_fin: val("heure_fin"),
       duree_totale: val("duree_totale"),
+      duree_intervention: val("duree_intervention"),
       nb_techniciens: val("nb_techniciens"),
       epi_remarques: val("epi_remarques"),
       observations: val("observations"),
@@ -1328,6 +1410,8 @@ async function exportToJSON() {
       etancheite: checkedValues("etancheite"),
       // Radios
       nacelle_prevoir: radioValue("nacelle_prevoir"),
+      nacelle_utilisee: radioValue("nacelle_utilisee"),
+      echelle_echafaud: radioValue("echelle_echafaud"),
       cablage_supp: radioValue("cablage_supp"),
       // EPI (radios dynamiques)
       epi: EPI_LIST.map(epi => ({ key: epi.key, value: radioValue("epi_" + epi.key) })),
@@ -1427,7 +1511,7 @@ async function importFromJSON(file) {
         "code_postal","ville","horaire","procedure_acces","tel_site",
         "contact_nom","contact_fonction","contact_tel","contact_mail",
         "empl_description","empl_hauteur","obstr_commentaire","cable_longueur",
-        "hauteur_max","heure_debut","heure_fin","duree_totale","nb_techniciens",
+        "hauteur_max","heure_debut","heure_fin","duree_totale","duree_intervention","nb_techniciens",
         "epi_remarques","observations","signataire_nom","signataire_date"
       ];
       TEXT_FIELDS.forEach(id => {
@@ -1448,8 +1532,13 @@ async function importFromJSON(file) {
       restoreCheckGroup("etancheite",  formData.etancheite);
 
       // 4) Restaurer les radios
-      if (formData.nacelle_prevoir) setRadio("nacelle_prevoir", formData.nacelle_prevoir);
-      if (formData.cablage_supp)    setRadio("cablage_supp",    formData.cablage_supp);
+      if (formData.nacelle_prevoir)  setRadio("nacelle_prevoir",  formData.nacelle_prevoir);
+      if (formData.nacelle_utilisee) setRadio("nacelle_utilisee", formData.nacelle_utilisee);
+      if (formData.echelle_echafaud) setRadio("echelle_echafaud", formData.echelle_echafaud);
+      if (formData.cablage_supp)     setRadio("cablage_supp",     formData.cablage_supp);
+
+      // 4b) Recalculer la durée à partir des heures restaurées (mode TRAVAUX)
+      updateDureeIntervention();
 
       // 5) Restaurer les EPI
       if (Array.isArray(formData.epi)) {
