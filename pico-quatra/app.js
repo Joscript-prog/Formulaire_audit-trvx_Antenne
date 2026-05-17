@@ -61,6 +61,13 @@ function updateFieldsForMode(mode) {
     
     const accesFieldRow = document.getElementById("accesFieldRow");
     if (accesFieldRow) accesFieldRow.style.display = isTravaux ? 'none' : '';
+
+    // Sections 5.2 / 6.2 : titres adaptés au mode (audit = à installer, travaux = posés)
+    const picoPosesTitle = document.getElementById("picoPosesTitle");
+    if (picoPosesTitle) picoPosesTitle.innerText = isTravaux ? '5.2 — PICO posés' : '5.2 — Pico à installer';
+
+    const quatraEquipTitle = document.getElementById("quatraEquipTitle");
+    if (quatraEquipTitle) quatraEquipTitle.innerText = isTravaux ? '6.2 — Équipements posés' : '6.2 — Equipements à installer';
 }
 
 function setMode(mode) {
@@ -1494,7 +1501,7 @@ async function generateReport() {
             }
             const picoPoses = collectPicoPoses();
             if (picoPoses.length > 0) {
-                children.push(H("5.2 PICO posés", 2));
+                children.push(H(isTravaux ? "5.2 PICO posés" : "5.2 Pico à installer", 2));
                 const rows = [ new TableRow({ tableHeader: true, children: [ cellText("N°", { width: 800, shading: COLOR_SUBTITLE, color: COLOR_WHITE, bold: true, align: AlignmentType.CENTER }), cellText("Zone / Pièce", { width: 3280, shading: COLOR_SUBTITLE, color: COLOR_WHITE, bold: true }), cellText("Note", { width: 5280, shading: COLOR_SUBTITLE, color: COLOR_WHITE, bold: true }) ] }) ];
                 picoPoses.forEach(p => rows.push(new TableRow({ children: [ cellText(`PICO ${p.num}`, { width: 800, bold: true, align: AlignmentType.CENTER }), cellText(p.zone || "—", { width: 3280 }), cellText(p.note || "", { width: 5280 }) ] })));
                 children.push(new Table({ width: { size: 9360, type: WidthType.DXA }, alignment: AlignmentType.CENTER, columnWidths: [800, 3280, 5280], rows }));
@@ -1534,7 +1541,7 @@ async function generateReport() {
             const qCu = val("quatra_nb_cu");
             const qMet = val("quatra_metrage_cu");
             if (qNu || qCu || qMet) {
-                children.push(H("6.2 Équipements posés", 2));
+                children.push(H(isTravaux ? "6.2 Équipements posés" : "6.2 Equipements à installer", 2));
                 const qRows = [];
                 if (qNu) qRows.push(new TableRow({ children: [cellText("Nombre de NU", { width: 4680, shading: COLOR_TABLE_LABEL, bold: true }), cellText(qNu, { width: 4680 })] }));
                 if (qCu) qRows.push(new TableRow({ children: [cellText("Nombre de CU", { width: 4680, shading: COLOR_TABLE_LABEL, bold: true }), cellText(qCu, { width: 4680 })] }));
